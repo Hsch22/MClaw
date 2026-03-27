@@ -1,0 +1,52 @@
+defaults:
+  - _self_
+
+mclaw:
+  tree_rollout:
+    root_budget: 256
+    n_envs: 16
+    root_clusters: 16
+    branch_budget: 16
+    intra_branch_clusters: 4
+    max_rounds: 30
+
+  clustering:
+    method: hidden_state
+    pca_dim: 128
+    hidden_state:
+      layer: -1
+    output_grad:
+      use_mean_pooling: true
+      top_k_logprobs: 200
+    logit_distribution:
+      top_k: 100
+
+  q_critic:
+    hidden_dim: 3584
+    intermediate_dim: 1024
+    lr: 1e-4
+    gamma: 0.99
+    update_freq: 1
+    td_lambda: 0.95
+
+  aux_loss:
+    coef: 0.2
+    use_same_advantage: true
+    weighting: equal_per_selected_cluster
+
+algorithm:
+  adv_estimator: mclaw
+
+actor_rollout_ref: {}
+data: {}
+trainer: {}
+
+environment:
+  adapter: agentgym-rl-qwen3
+  instance_pool: 16
+
+model:
+  family: /mnt/kangshijia/husicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507
+
+logging:
+  path_pattern: MClaw/log/{timestamp}.log
