@@ -3,15 +3,20 @@
 from .branch_selector import BranchSelector, SelectionResult
 from .contracts import (
     ActorBatch,
+    AuxiliarySample,
     AuxiliaryBatch,
     CriticBatch,
+    CriticSample,
+    EnvironmentStep,
     EnvironmentClientProtocol,
     InferenceEngineProtocol,
     RolloutHandlerProtocol,
+    TreeRolloutOutput,
     TokenizerProtocol,
     TrajectoryRecord,
+    TrajectoryStep,
 )
-from .tree_node import AuxiliarySample, CriticSample, EnvironmentStep, TreeNode, TreeRolloutOutput
+from .tree_node import TreeNode
 from .tree_rollout import BranchRuntime, TreeRollout
 
 __all__ = [
@@ -32,4 +37,5 @@ __all__ = [
     "TreeRollout",
     "TreeRolloutOutput",
     "TrajectoryRecord",
+    "TrajectoryStep",
 ]

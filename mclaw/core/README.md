@@ -5,14 +5,18 @@
 ## 当前文件
 
 - `__init__.py`：导出 core 层公共类型。
-- `tree_node.py`：定义 `TreeNode`、`EnvironmentStep`、`AuxiliarySample`、`CriticSample`、`TreeRolloutOutput`。
+- `tree_node.py`：定义纯树结构 `TreeNode` 和节点级辅助函数。
 - `branch_selector.py`：定义根节点代表选择、分支内动作选择和辅助样本标记接口。
 - `tree_rollout.py`：定义 `TreeRollout` 主引擎和 `BranchRuntime`。
 - `contracts.py`：定义本地批结构和外部依赖协议。
+  - `EnvironmentStep`
+  - `AuxiliarySample`
+  - `CriticSample`
   - `TrajectoryRecord`
   - `ActorBatch`
   - `AuxiliaryBatch`
   - `CriticBatch`
+  - `TreeRolloutOutput`
   - `TokenizerProtocol`
   - `InferenceEngineProtocol`
   - `EnvironmentClientProtocol`

@@ -9,6 +9,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     torch = None  # type: ignore[assignment]
 
+from mclaw.utils.vllm_hooks import build_output_grad_features, extract_topk_logprobs
+
 from .base import BaseClusterer
 
 
@@ -22,12 +24,20 @@ class OutputGradClusterer(BaseClusterer):
         model_outputs: Mapping[str, Any],
     ) -> torch.Tensor:
         """根据 top-k logprobs 和 embedding matrix 构造特征。"""
-        raise NotImplementedError("TODO: 实现 output-grad 特征提取逻辑。")
+        del state_token_ids
+        self._require_torch()
 
-    def build_expected_embeddings(
-        self,
-        topk_logprobs: Mapping[str, Any],
-        embedding_matrix: torch.Tensor,
-    ) -> torch.Tensor:
-        """计算策略期望 embedding。"""
-        raise NotImplementedError("TODO: 实现期望 embedding 计算逻辑。")
+        embedding_matrix = model_outputs.get("embedding_matrix")
+        if embedding_matrix is None:
+            raise KeyError("model_outputs must provide embedding_matrix for output-grad clustering")
+
+        topk_logprobs = model_outputs.get("topk_logprobs")
+        if topk_logprobs is None:
+            topk_logprobs = extract_topk_logprobs(model_outputs.get("generation_output", model_outputs))
+
+        return build_output_grad_features(
+            action_token_ids=action_token_ids,
+            topk_logprobs=topk_logprobs,
+            embedding_matrix=embedding_matrix,
+            use_mean_pooling=self.config.output_grad.use_mean_pooling,
+        )

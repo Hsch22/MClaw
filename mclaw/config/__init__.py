@@ -63,7 +63,7 @@ class QCriticConfig:
     lr: float = 1e-4
     gamma: float = 0.99
     update_freq: int = 1
-    td_lambda: float = 0.95
+    grad_clip_norm: float | None = 1.0
 
 
 @dataclass(slots=True)

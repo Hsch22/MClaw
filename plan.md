@@ -694,7 +694,6 @@ mclaw:
     lr: 1e-4
     gamma: 0.99
     update_freq: 1             # 每个 training step 更新几次 Q-head
-    td_lambda: 0.95            # TD(λ) 的 λ
 
   aux_loss:
     coef: 0.2                          # 同簇未执行动作的 auxiliary loss 总权重

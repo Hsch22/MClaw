@@ -11,7 +11,16 @@ from .config import (
     QCriticConfig,
     TreeRolloutConfig,
 )
-from .core import ActorBatch, AuxiliaryBatch, CriticBatch, TrajectoryRecord, TreeNode, TreeRollout, TreeRolloutOutput
+from .core import (
+    ActorBatch,
+    AuxiliaryBatch,
+    CriticBatch,
+    TrajectoryRecord,
+    TrajectoryStep,
+    TreeNode,
+    TreeRollout,
+    TreeRolloutOutput,
+)
 from .critic import QCritic, QHead, compute_tree_advantage
 
 __all__ = [
@@ -33,5 +42,6 @@ __all__ = [
     "TreeRolloutConfig",
     "TreeRolloutOutput",
     "TrajectoryRecord",
+    "TrajectoryStep",
     "compute_tree_advantage",
 ]

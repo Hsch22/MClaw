@@ -32,15 +32,37 @@ class QHead(nn.Module):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        # 先把网络层级占好位，具体前向逻辑后续补齐。
+        self.output_proj = nn.Linear(intermediate_dim, 1)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, intermediate_dim),
             nn.GELU(),
             nn.Linear(intermediate_dim, intermediate_dim),
             nn.GELU(),
-            nn.Linear(intermediate_dim, 1),
+            self.output_proj,
         )
+        self._reset_parameters()
+
+    def _reset_parameters(self) -> None:
+        """将最后一层置零，避免初始 Q 值抖动过大。"""
+        if torch is None:
+            raise ModuleNotFoundError("torch is required to initialize QHead.")
+        nn.init.zeros_(self.output_proj.weight)
+        nn.init.zeros_(self.output_proj.bias)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """将 action hidden state 映射成标量 Q 值。"""
-        raise NotImplementedError("TODO: 实现 QHead.forward。")
+        if torch is None:
+            raise ModuleNotFoundError("torch is required to run QHead.")
+        if not isinstance(hidden_states, torch.Tensor):
+            raise TypeError("hidden_states must be a torch.Tensor")
+        if hidden_states.ndim != 2:
+            raise ValueError(
+                "hidden_states must be 2D, "
+                f"got shape {tuple(hidden_states.shape)}"
+            )
+        if hidden_states.size(-1) != self.hidden_dim:
+            raise ValueError(
+                f"expected hidden_states dim {self.hidden_dim}, "
+                f"got {hidden_states.size(-1)}"
+            )
+        return self.mlp(hidden_states).squeeze(-1)

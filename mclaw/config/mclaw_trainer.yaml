@@ -27,7 +27,7 @@ mclaw:
     lr: 1e-4
     gamma: 0.99
     update_freq: 1
-    td_lambda: 0.95
+    grad_clip_norm: 1.0
 
   aux_loss:
     coef: 0.2
