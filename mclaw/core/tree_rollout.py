@@ -859,7 +859,7 @@ def _resolve_text(value: Any) -> str:
 
 
 def _resolve_log_prob(value: Any) -> float | None:
-    for key in ("log_prob", "cum_logprob", "score"):
+    for key in ("log_prob", "cum_logprob", "cumulative_logprob", "score"):
         candidate = _resolve_field(value, key)
         if candidate is None:
             continue

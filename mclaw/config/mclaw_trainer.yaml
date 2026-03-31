@@ -37,16 +37,95 @@ mclaw:
 algorithm:
   adv_estimator: mclaw
 
-actor_rollout_ref: {}
-data: {}
-trainer: {}
+actor_rollout_ref:
+  actor:
+    clip_ratio: 0.2
+    entropy_coeff: 0.0
+    grad_clip: 1.0
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    ppo_epochs: 1
+    ppo_mini_batch_size: 1
+    ppo_micro_batch_size_per_gpu: 1
+    ppo_max_token_len_per_gpu: 2048
+    use_dynamic_bsz: false
+    use_kl_loss: true
+    ulysses_sequence_parallel_size: 1
+    optim:
+      lr: 1e-6
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+    log_prob_max_token_len_per_gpu: 2048
+  rollout:
+    n: 1
+    logprobs: 1
+    max_tokens: 128
+    temperature: 1.0
+    top_p: 1.0
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.7
+    max_model_len: 4096
+
+data:
+  train_file: ""
+  train_batch_size: 1
+  shuffle: true
+  num_workers: 0
+  drop_last: false
+  prompt_key: prompt
+  max_prompt_length: 1024
+  max_response_length: 512
+  use_verl_dataset: false
+  cache_dir: ""
+
+trainer:
+  total_epochs: 1
+  max_steps: 0
+  save_freq: 0
+  default_local_dir: MClaw/checkpoints
+  checkpoint_dir: ""
+  resume_from: ""
+  seed: 42
 
 environment:
   adapter: agentgym-rl-qwen3
   instance_pool: 16
+  reset_kwargs: {}
+  step_kwargs: {}
+
+adapter:
+  actor_backend: verl
+  ref_policy: verl
+  inference_engine: verl_vllm
+  env_client: agentenv
+  rollout_handler: verl
+  logger: standard
+  task_name: textcraft
+  env_addr: http://127.0.0.1:36006
+  max_retries: 3
 
 model:
   family: /mnt/kangshijia/husicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507
+  model_path: ""
+  tokenizer_path: ""
+  dtype: bfloat16
+  trust_remote_code: true
+  revision: null
+  use_remove_padding: false
+  pad_token_as_eos: true
+
+distributed:
+  enable_fsdp: false
+  tensor_parallel_size: 1
+  full_params: false
+  device: cuda
+  fsdp_config: {}
+  use_rollout_sharding_manager: true
+  use_training_sharding_manager: false
 
 logging:
   path_pattern: MClaw/log/{timestamp}.log
+  level: INFO
+  tracker: none
+  project_name: mclaw
+  experiment_name: textcraft

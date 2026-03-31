@@ -1,41 +1,83 @@
 # mclaw
 
-`mclaw/` 是 MClaw 的主包目录，当前已经完成接口级代码骨架。
+`mclaw/` 是仓库的主包目录。当前它不再只是 prototype 接口集合，而是已经具备一条可装配的本地训练链路：
 
-## 当前结构
+- 配置加载
+- Tree rollout
+- 聚类
+- Q-head critic
+- verl / vLLM / agentenv 适配
+- trainer 主循环
+- checkpoint 保存/恢复
 
-```text
-mclaw/
-├── __init__.py
-├── README.md
-├── clustering/
-├── config/
-├── core/
-├── critic/
-├── trainer/
-└── utils/
-```
+## 子模块
 
-## 子模块职责
+- `config/`
+  - 强类型 dataclass 配置和默认 YAML
+- `core/`
+  - 树节点、rollout 批结构、协议、`TreeRollout`
+- `adapters/`
+  - `ActorBatch <-> DataProto` 适配
+  - actor / ref / env / vLLM / rollout handler / logger 包装
+- `clustering/`
+  - hidden-state / output-grad / logprob / logit-distribution 聚类器
+- `critic/`
+  - `QHead`
+  - `QCritic`
+  - tree advantage / TD target 计算
+- `trainer/`
+  - `MClawTrainer`
+  - CLI 入口
+  - trainer/backend 协议
+- `utils/`
+  - vLLM top-k logprob、embedding matrix 等工具
 
-- `config/`：配置 dataclass 和默认 YAML。
-- `core/`：树状 rollout 主流程、树节点、本地批结构、选择器接口。
-- `clustering/`：聚类器基类和不同候选动作特征方案接口。
-- `critic/`：Q-head、Q-critic、step-level advantage 接口。
-- `trainer/`：训练主循环、命令行入口、训练后端协议。
-- `utils/`：vLLM 兼容和 embedding / logprob 辅助接口。
+## 当前包级导出
 
-## 包级导出
+`mclaw/__init__.py` 当前导出：
 
-`__init__.py` 当前导出：
-
-- 配置类型：`TreeRolloutConfig`、`ClusteringConfig`、`QCriticConfig`、`MClawTrainerConfig`
-- 核心类型：`TreeNode`、`TreeRollout`、`TreeRolloutOutput`
-- 本地批结构：`ActorBatch`、`AuxiliaryBatch`、`CriticBatch`、`TrajectoryRecord`
-- critic 接口：`QHead`、`QCritic`、`compute_tree_advantage`
+- 配置：
+  - `DEFAULT_CONFIG_PATH`
+  - `TreeRolloutConfig`
+  - `ClusteringConfig`
+  - `QCriticConfig`
+  - `AuxLossConfig`
+  - `AdapterConfig`
+  - `ModelConfig`
+  - `DistributedConfig`
+  - `DataConfig`
+  - `TrainerRuntimeConfig`
+  - `EnvironmentConfig`
+  - `LoggingConfig`
+  - `MClawTrainerConfig`
+- core：
+  - `TreeNode`
+  - `TreeRollout`
+  - `TreeRolloutOutput`
+  - `TrajectoryRecord`
+  - `TrajectoryStep`
+  - `ActorBatch`
+  - `AuxiliaryBatch`
+  - `CriticBatch`
+- critic：
+  - `QHead`
+  - `QCritic`
+  - `compute_tree_advantage`
 
 ## 当前状态
 
-- 已完成包结构和模块边界设计。
-- 已建立与 AgentGym-RL 风格兼容的本地接口和协议。
-- 未直接依赖 AgentGym-RL 源码；后续通过适配层对接外部训练后端。
+- `trainer/main.py` 已实现：
+  - OmegaConf YAML 加载
+  - CLI overrides 合并
+  - trainer 组装
+  - `trainer.fit()` 入口
+- `trainer/mclaw_trainer.py` 已实现：
+  - dataloader
+  - checkpoint 保存/恢复
+  - 多 epoch PPO 更新
+  - rollout/training sharding context 切换
+- 当前仍需依赖外部运行环境做联调：
+  - verl
+  - vLLM
+  - agentenv
+  - 已初始化的 distributed/FSDP 环境

@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Protocol, runtime_checkable
 
-from mclaw.core.contracts import ActorBatch, AuxiliaryBatch
-
-
 @runtime_checkable
 class ActorBackendProtocol(Protocol):
     """兼容 PPO actor worker 的最小接口。"""
 
-    def compute_log_prob(self, batch: ActorBatch) -> Mapping[str, Any]:
-        """重算 actor log-prob，并返回可写回 `batch.metadata["old_log_probs"]` 的结果。"""
+    def compute_log_prob(self, batch: Any) -> Mapping[str, Any]:
+        """重算 actor log-prob。
 
-    def update_policy(self, batch: ActorBatch) -> Mapping[str, float]:
+        `batch` 可以是原始 `ActorBatch`，也可以是适配层产出的 `DataProto`/包装对象。
+        """
+
+    def update_policy(self, batch: Any) -> Mapping[str, float]:
         """执行 PPO actor 更新。
 
         默认约定:
@@ -25,7 +25,7 @@ class ActorBackendProtocol(Protocol):
           不应在 PPO 多 epoch 过程中覆盖或就地修改它们
         """
 
-    def update_aux_loss(self, batch: AuxiliaryBatch) -> Mapping[str, float]:
+    def update_aux_loss(self, batch: Any) -> Mapping[str, float]:
         """执行独立 auxiliary loss 更新的兼容接口（默认 MClaw train_step 不再调用）。"""
 
 
@@ -33,7 +33,7 @@ class ActorBackendProtocol(Protocol):
 class ReferencePolicyProtocol(Protocol):
     """兼容 reference policy 的最小接口。"""
 
-    def compute_ref_log_prob(self, batch: ActorBatch) -> Mapping[str, Any]:
+    def compute_ref_log_prob(self, batch: Any) -> Mapping[str, Any]:
         """重算 reference log-prob，并返回可写回 `batch.metadata["ref_log_probs"]` 的结果。"""
 
 

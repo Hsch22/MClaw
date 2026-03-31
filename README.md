@@ -1,10 +1,30 @@
 # MClaw
 
-MClaw 是一个面向 Agent RL 的树状 rollout 框架。核心思路是在每一步动作决策时先生成大量候选动作（candidate actions），再通过聚类剪枝减少真实环境交互，同时用 Q-critic 为未执行动作提供 value 估计，并最终回到 PPO 主训练链路。
+环境为
+agentgym-rl-qwen3-clean     /mnt/kangshijia/wangbinyu/conda_envs/agentgym-rl-qwen3-clean
+agentenv-webarena        /mnt/kangshijia/wangbinyu/conda_envs/agentenv-webarena
 
-当前仓库状态是“接口骨架已建立，具体算法实现待补充”。现有代码优先把模块边界、数据结构、配置入口和外部适配点固定下来，避免后续实现时出现大范围返工。
 
-## 当前项目结构
+
+MClaw 是一个面向 Agent RL 的树状 rollout prototype。当前代码不再只是“空骨架”: `TreeRollout`、`BaseClusterer`、`QCritic`、`compute_tree_advantage()` 和 `MClawTrainer.train_step()` 都已经有可执行的原型逻辑；仍然缺的是配置加载、外部后端适配、`fit()` 主循环和端到端联调。
+
+## 当前实现处于什么阶段
+
+- 已实装的原型逻辑：
+  - 树状 rollout 主流程：根节点批量展开、后续分支展开、候选动作批量打分、聚类、真实执行、轨迹展平。
+  - 聚类基类：可选 PCA 降维 + 确定性的 torch K-Means + representative 选择。
+  - 四类聚类特征：`hidden_state`、`output_grad`、`logprob`、`logit_distribution`。
+  - Q-head / Q-critic：共享 backbone 编码 `[state + action]`，只更新 Q-head。
+  - 树上的 step-level advantage：被执行节点用 TD target 覆盖 `q_value`，再计算 `advantage = Q - V`。
+  - trainer 单步更新：重算 actor old/ref log probs，合并 auxiliary loss 信号，支持多 epoch PPO 和多次 Q-head update。
+
+- 仍然是 TODO 的部分：
+  - `mclaw.trainer.main` 里的 `load_config()`、`build_trainer()`、`main()`。
+  - `MClawTrainer.fit()`、`save_checkpoint()`、`build_rollout_engine()`。
+  - actor / ref policy / env / logger 的真实适配层。
+  - 和 AgentGym-RL 风格训练栈的端到端集成。
+
+## 仓库结构
 
 ```text
 MClaw/
@@ -18,140 +38,77 @@ MClaw/
     ├── README.md
     ├── __init__.py
     ├── clustering/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   ├── base.py
-    │   ├── hidden_state.py
-    │   ├── logit_distribution.py
-    │   ├── logprob.py
-    │   └── output_grad.py
     ├── config/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   └── mclaw_trainer.yaml
     ├── core/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   ├── branch_selector.py
-    │   ├── contracts.py
-    │   ├── tree_node.py
-    │   └── tree_rollout.py
     ├── critic/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   ├── advantage.py
-    │   ├── q_critic.py
-    │   └── q_head.py
     ├── trainer/
-    │   ├── README.md
-    │   ├── __init__.py
-    │   ├── contracts.py
-    │   ├── main.py
-    │   └── mclaw_trainer.py
     └── utils/
-        ├── README.md
-        ├── __init__.py
-        └── vllm_hooks.py
 ```
 
-## 术语约定
+## 模块概览
 
-- 候选动作：模型在某一步生成、尚未在真实环境执行的动作。
-- 被执行动作：同一步候选动作中最终真正送入环境执行的动作。
-- 真实分支：由被执行动作串起来的真实环境交互路径。
-- 同簇未执行动作：与被执行动作属于同一聚类簇、但未执行的候选动作。
-- 辅助样本：由同簇未执行动作构造出的 auxiliary loss 输入。
-- 本地批结构：MClaw 内部统一使用的 `TrajectoryRecord`、`ActorBatch`、`AuxiliaryBatch`、`CriticBatch`。
-- 协议：MClaw 对 tokenizer、推理引擎、环境客户端、训练后端等外部对象要求的最小方法集合。
-- 适配层：把本地批结构转换为外部训练后端可接受格式的桥接层。
+- `plan.md`
+  - 算法设计文档，当前实现大体按这里的模块边界推进。
 
-## 各模块职责
+- `mclaw/config/`
+  - dataclass 配置定义和默认 YAML。
+  - 已导出 `DEFAULT_CONFIG_PATH`、`TreeRolloutConfig`、`ClusteringConfig`、`QCriticConfig`、`AuxLossConfig`、`MClawTrainerConfig`。
 
-- `plan.md`：算法设计、实现顺序和关键决策说明。
-- `setup.py`：包安装入口，注册 `mclaw-train` 命令。
-- `examples/textcraft_train.sh`：最小训练命令示例。
+- `mclaw/core/`
+  - 本地批结构和外部协议。
+  - `TreeNode` 现在是纯树节点定义；训练样本容器已经移到 `contracts.py`。
+  - `TreeRolloutOutput` 只保留 `actor_data`、`aux_actor_data`、`critic_data` 和 `roots`，不再重复暴露原始 sample 列表。
+  - `EnvironmentClientProtocol.step()` 现在统一要求返回 gym 风格 4-tuple。
 
-- `mclaw/config/`：配置类型和默认 YAML。
-  - `__init__.py` 中定义 `TreeRolloutConfig`、`ClusteringConfig`、`QCriticConfig`、`MClawTrainerConfig` 等 dataclass。
-  - `mclaw_trainer.yaml` 提供默认训练配置骨架。
+- `mclaw/clustering/`
+  - `BaseClusterer` 已包含实际的特征清洗、可选 PCA、确定性 K-Means 和 representative 选择。
+  - 各具体 clusterer 已有特征提取实现，而不是占位文件。
 
-- `mclaw/core/`：树状 rollout 的核心接口。
-  - `tree_node.py` 定义 `TreeNode`、`AuxiliarySample`、`CriticSample`、`TreeRolloutOutput`。
-  - `branch_selector.py` 定义根节点代表选择和分支内动作选择接口。
-  - `tree_rollout.py` 定义 `TreeRollout` 主引擎接口。
-  - `contracts.py` 定义本地批结构和外部依赖协议，如 `ActorBatch`、`CriticBatch`、`EnvironmentClientProtocol`、`RolloutHandlerProtocol`。
+- `mclaw/critic/`
+  - `QHead` 已实现两层 MLP + zero-init 输出层。
+  - `QCritic` 已实现批量编码、TD target 构造和 Q-head 更新。
+  - `advantage.py` 已实现 executed-node 的 TD/advantage 回填和状态值估计。
 
-- `mclaw/clustering/`：聚类接口和不同候选动作特征方案。
-  - `base.py`：`BaseClusterer` 和 `ClusterResult`。
-  - `hidden_state.py`：主方案接口。
-  - `output_grad.py`：fallback 方案接口。
-  - `logprob.py`：baseline 方案接口。
-  - `logit_distribution.py`：分析型方案接口。
+- `mclaw/trainer/`
+  - `train_step()`、`update_actor()`、`update_q_head()` 已实现。
+  - 训练后端协议位于 `trainer/contracts.py`。
+  - CLI 入口文件存在，但配置加载和 trainer 组装仍未接好。
 
-- `mclaw/critic/`：Q-value 和 advantage 相关接口。
-  - `q_head.py`：轻量 `QHead` 模块骨架。
-  - `q_critic.py`：共享 backbone 的 `QCritic` 接口。
-  - `advantage.py`：树结构上的 step-level advantage 接口。
+- `mclaw/utils/`
+  - `EmbeddingMatrixCache`、`extract_topk_logprobs()`、`build_output_grad_features()` 已实现。
+  - 面向 vLLM top-k logprob 输出的解析逻辑已从“猜格式”收紧为较严格的契约。
 
-- `mclaw/trainer/`：训练器和训练入口。
-  - `mclaw_trainer.py`：`MClawTrainer` 主循环骨架。
-  - `main.py`：命令行入口、配置加载和 trainer 组装入口。
-  - `contracts.py`：与外部 actor/ref/logger 后端解耦的协议定义和适配边界。
+## 当前训练数据流
 
-- `mclaw/utils/`：辅助工具接口。
-  - `vllm_hooks.py`：top-k logprob、embedding matrix cache、output-grad 特征构造接口。
-
-## 当前实现状态
-
-- 已完成：
-  - 包结构、模块导出、配置骨架。
-  - 树节点和训练样本的公共数据结构。
-  - rollout、clustering、critic、trainer、utils 的主接口。
-  - 命令行入口和示例脚本占位。
-  - 无 `torch` 环境下的基础导入兼容。
-
-- 尚未完成：
-  - 具体聚类算法实现。
-  - Q-head / Q-critic 前向和训练逻辑。
-  - 树状 rollout 主循环。
-  - actor / ref / env / logger 的真实适配层实现。
-  - 与具体环境和训练后端的端到端联调。
-
-## 技术原则
-
-- 环境侧：默认不依赖环境原生 `fork`；固定环境实例池，当前设计为 `16` 个真实执行分支。
-- Rollout 侧：第 `0` 轮从根状态生成 `256` 个候选动作，聚类后选 `16` 个执行；后续每个活跃分支每步固定生成 `16` 个候选动作。
-- 聚类侧：主方案使用 `hidden_state` 聚类；fallback 使用 `output_grad`；先保证流程可跑通，再优化质量。
-- 分支侧：后续只做分支内聚类；每个活跃分支每步只真实执行 `1` 个 action。
-- 训练侧：PPO 主样本来自被执行的完整轨迹；同簇未执行动作通过 auxiliary loss 参与训练。
-- 权重侧：auxiliary loss 采用“簇等权”，避免大簇吞掉小簇。
-- Critic 侧：复用 actor backbone 的 FSDP module；默认只训练 `Q-head`，backbone 冻结。
+1. `TreeRollout.generate_tree_rollout()` 对每个 prompt 构建 root。
+2. 根节点用“重复 prompt 组成 batch”的方式生成 `root_budget` 个候选动作。
+3. `QCritic.score_actions()` 对所有候选 `(state, action)` 批量打分。
+4. `clusterer.cluster_candidates()` 做聚类，`BranchSelector` 选代表动作。
+5. 被选动作送入环境执行，生成 observation tokens 并写回节点。
+6. `compute_tree_advantage()` 反向计算 executed nodes 的 `td_target`、`q_value`、`advantage`。
+7. rollout 构造三类本地 batch：
+   - `ActorBatch`
+   - `AuxiliaryBatch`
+   - `CriticBatch`
+8. `MClawTrainer.train_step()` 调用：
+   - `compute_old_log_probs()`
+   - `compute_ref_log_probs()`
+   - 多 epoch `update_policy()`
+   - 多次 `q_critic.update()`
 
 ## 与 AgentGym-RL 的关系
 
-MClaw 的目标是与 AgentGym-RL 的训练数据流和调用阶段保持兼容，但不直接 `import` AgentGym-RL 代码，以避免强耦合。
+MClaw 的目标仍然是语义兼容，而不是源码耦合。
 
-当前策略是：
+- `core/contracts.py` 定义 rollout 侧本地批结构和协议。
+- `trainer/contracts.py` 定义训练后端协议。
+- `MClawTrainer` 通过 `adapt_actor_batch()` / `adapt_critic_batch()` 等钩子为外部后端预留适配入口。
 
-- 在 `mclaw/core/contracts.py` 中定义本地批结构，如 `ActorBatch`、`AuxiliaryBatch`、`CriticBatch`。
-- 在 `mclaw/core/contracts.py` 和 `mclaw/trainer/contracts.py` 中定义最小协议，如 tokenizer、inference engine、environment client、actor backend、reference policy、logger。
-- 在 `MClawTrainer` 中预留批适配接口，后续通过适配层把本地结构转换成外部训练后端需要的格式。
+因此当前仓库可以单独迭代核心逻辑，接入 AgentGym-RL 时只需要补适配层，不需要反向污染 MClaw 内部模块边界。
 
-这意味着：
+## 入口和示例
 
-- MClaw 内部可以独立开发和测试。
-- 后续接入 AgentGym-RL 时，只需要实现适配层，不需要把核心逻辑写死在其源码接口上。
+- `setup.py` 已注册 `mclaw-train=mclaw.trainer.main:main`
+- `examples/textcraft_train.sh` 展示了目标 CLI 形状
 
-## 兼容性约束
-
-- 环境适配器目标：`agentgym-rl-qwen3-clean`
-- 模型家族目标：`/mnt/kangshijia/husicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507`
-- 日志路径约定：`MClaw/log/{timestamp}.log`
-- 参数传递方式：支持配置文件和命令行覆盖
-- 部署形态：单机多卡
-
-## 后续建议
-
-- 先实现 `logprob` baseline，把树状 rollout 主流程跑通。
-- 再接入 `QCritic` 和 `hidden_state` 聚类，把聚类与价值估计合并到同一条 FSDP forward 链路中。
-- 最后补外部训练后端适配层，完成和 AgentGym-RL 风格训练流程的联调。
+但要注意：当前 CLI 入口还没有真正实现，所以示例脚本仍是“未来接线方式”的说明，不是可直接运行的完整训练脚本。

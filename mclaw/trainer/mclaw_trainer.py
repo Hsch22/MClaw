@@ -2,13 +2,17 @@ from __future__ import annotations
 
 """MClaw 训练循环接口。"""
 
-from copy import deepcopy
-from collections.abc import Sequence as SequenceABC
-from contextlib import nullcontext
 from collections.abc import Mapping as MappingABC, MutableMapping
+from collections.abc import Sequence as SequenceABC
+from copy import deepcopy
+from dataclasses import asdict
+import json
+from contextlib import nullcontext
 from numbers import Real
+from pathlib import Path
 from typing import Any, Mapping
 
+from mclaw.adapters import AdaptedActorBatch, DataProtoAdapter
 from mclaw.config import MClawTrainerConfig
 from mclaw.core import ActorBatch, AuxiliaryBatch, CriticBatch, TreeRollout
 from mclaw.critic import QCritic
@@ -29,6 +33,13 @@ class MClawTrainer:
         logger: LoggerProtocol | None = None,
         rollout_sharding_manager: Any | None = None,
         training_sharding_manager: Any | None = None,
+        *,
+        tokenizer: Any | None = None,
+        inference_engine: Any | None = None,
+        clusterer: Any | None = None,
+        env_client_factory: Any | None = None,
+        branch_selector: Any | None = None,
+        dataproto_adapter: DataProtoAdapter | None = None,
     ) -> None:
         self.config = config
         self.tree_rollout = tree_rollout
@@ -38,28 +49,73 @@ class MClawTrainer:
         self.logger = logger
         self.rollout_sharding_manager = rollout_sharding_manager
         self.training_sharding_manager = training_sharding_manager
+        self.tokenizer = tokenizer
+        self.inference_engine = inference_engine
+        self.clusterer = clusterer
+        self.env_client_factory = env_client_factory
+        self.branch_selector = branch_selector
+        self.dataproto_adapter = dataproto_adapter
         self.global_step = 0
+        self._current_epoch = 0
+        self._current_batch_index = -1
 
     def build_rollout_engine(self) -> TreeRollout:
         """组装 TreeRollout 及其依赖模块。"""
-        raise NotImplementedError("TODO: 实现 rollout 引擎组装逻辑。")
+        if self.tree_rollout is not None:
+            return self.tree_rollout
+        if self.inference_engine is None:
+            raise ValueError("inference_engine must be configured before building TreeRollout")
+        if self.q_critic is None:
+            raise ValueError("q_critic must be configured before building TreeRollout")
+        if self.clusterer is None:
+            raise ValueError("clusterer must be configured before building TreeRollout")
+        if self.tokenizer is None:
+            raise ValueError("tokenizer must be configured before building TreeRollout")
+
+        self.tree_rollout = TreeRollout(
+            inference_engine=self.inference_engine,
+            actor_module_fsdp=self.q_critic.actor_module_fsdp,
+            q_critic=self.q_critic,
+            clusterer=self.clusterer,
+            tokenizer=self.tokenizer,
+            config=self.config.tree_rollout,
+            env_client_factory=self.env_client_factory,
+            branch_selector=self.branch_selector,
+        )
+        return self.tree_rollout
 
     def fit(self) -> None:
         """执行完整训练循环。"""
-        # 计划中的主循环应当与 AgentGym-RL / Ray worker 语义对齐：
-        # 1. 构建或恢复 dataloader / checkpoint / global_step。
-        # 2. 对每个 prompt batch:
-        #    - 进入 rollout sharding context，同步 rollout 权重并执行 tree rollout。
-        #    - 切到 training sharding context（若未单独配置，则至少保证 FSDP actor 仍可前向）。
-        #    - 先重算 actor old_log_probs 和 ref_log_probs，再执行多 epoch PPO update。
-        #    - Q-head update 也必须在可用的 FSDP context 下运行，因为 q_critic.update()
-        #      内部会重新做 backbone forward。
-        #    - 记录 metrics，按 save_freq 处理 checkpoint。
-        # 3. 支持 checkpoint 恢复后的 dataloader / step continuation。
-        raise NotImplementedError(
-            "TODO: implement fit() with dataloader iteration, checkpointing, and "
-            "explicit rollout/training sharding-manager context switches."
-        )
+        self.build_rollout_engine()
+        dataloader = self._build_dataloader()
+        resume_state = self._load_checkpoint_if_needed()
+
+        total_epochs = max(int(self.config.trainer.total_epochs), 1)
+        max_steps = max(int(self.config.trainer.max_steps), 0)
+        start_epoch = int(resume_state.get("epoch", 0))
+        start_batch_index = int(resume_state.get("batch_index", -1))
+
+        if max_steps > 0 and self.global_step >= max_steps:
+            return
+
+        for epoch in range(start_epoch, total_epochs):
+            skip_completed_batches = epoch == start_epoch
+            for batch_index, prompt_batch in enumerate(dataloader):
+                if skip_completed_batches and batch_index <= start_batch_index:
+                    continue
+
+                normalized_prompt_batch = self._normalize_prompt_batch(prompt_batch)
+                self.train_step(normalized_prompt_batch)
+
+                self._current_epoch = epoch
+                self._current_batch_index = batch_index
+
+                save_freq = max(int(self.config.trainer.save_freq), 0)
+                if save_freq > 0 and self.global_step > 0 and self.global_step % save_freq == 0:
+                    self.save_checkpoint(self.global_step)
+
+                if max_steps > 0 and self.global_step >= max_steps:
+                    return
 
     def train_step(self, prompt_batch: Any) -> dict[str, float]:
         """执行单个 training step。"""
@@ -99,21 +155,22 @@ class MClawTrainer:
         return metrics
 
     def adapt_actor_batch(self, actor_data: ActorBatch) -> Any:
-        """将本地 ActorBatch 转成外部后端可接受的格式。
-
-        如果适配层返回的是一个新对象而不是原始 `ActorBatch`，它必须保留
-        `metadata["old_log_probs"]`、`metadata["ref_log_probs"]` 以及
-        `metadata["auxiliary_*"]` 这些训练期必需字段。
-        """
-        return actor_data
+        """将本地 ActorBatch 转成外部后端可接受的格式。"""
+        if self.dataproto_adapter is None:
+            return actor_data
+        return self.dataproto_adapter.adapt_actor_batch(
+            actor_data,
+            include_ref_log_prob=self._should_include_ref_log_prob(),
+            meta_info_overrides=self._build_dataproto_meta_info(),
+        )
 
     def adapt_auxiliary_batch(self, aux_actor_data: AuxiliaryBatch) -> Any:
         """将本地 AuxiliaryBatch 转成外部后端可接受的格式。"""
-        return aux_actor_data
+        return list(aux_actor_data.samples)
 
     def adapt_critic_batch(self, critic_data: CriticBatch) -> Any:
         """将本地 CriticBatch 转成 Q-head 更新所需格式。"""
-        return critic_data
+        return list(critic_data.samples)
 
     def update_actor(
         self,
@@ -213,7 +270,27 @@ class MClawTrainer:
 
     def save_checkpoint(self, step: int) -> None:
         """保存训练状态。"""
-        raise NotImplementedError("TODO: 实现 checkpoint 保存逻辑。")
+        torch = _import_torch()
+
+        checkpoint_dir = self._resolve_checkpoint_dir()
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = checkpoint_dir / f"global_step_{step}.pt"
+
+        state = {
+            "global_step": int(step),
+            "epoch": int(self._current_epoch),
+            "batch_index": int(self._current_batch_index),
+            "config": asdict(self.config),
+            "actor_module_state_dict": self._maybe_state_dict(self._resolve_actor_module()),
+            "q_head_state_dict": self._maybe_state_dict(self._resolve_q_head()),
+            "q_critic_optimizer_state_dict": self._maybe_optimizer_state_dict(
+                getattr(self.q_critic, "optimizer", None)
+            ),
+            "actor_optimizer_state_dict": self._maybe_optimizer_state_dict(
+                self._resolve_actor_optimizer()
+            ),
+        }
+        torch.save(state, checkpoint_path)
 
     def _record_batch_signal(
         self,
@@ -350,6 +427,12 @@ class MClawTrainer:
         if adapted_batch is None:
             raise TypeError("adapt_actor_batch must not return None")
 
+        if isinstance(adapted_batch, AdaptedActorBatch):
+            return
+
+        if hasattr(adapted_batch, "batch") and hasattr(adapted_batch, "meta_info"):
+            return
+
         if hasattr(adapted_batch, "metadata"):
             metadata = getattr(adapted_batch, "metadata")
             if isinstance(metadata, MutableMapping):
@@ -373,8 +456,8 @@ class MClawTrainer:
             return
 
         raise TypeError(
-            "adapt_actor_batch must return an ActorBatch or an object exposing a mutable "
-            "metadata mapping so old/ref log probs and auxiliary signals survive PPO epochs"
+            "adapt_actor_batch must return an ActorBatch, an AdaptedActorBatch, a "
+            "DataProto-like object, or an object exposing mutable metadata"
         )
 
     def _resolve_nested_config_value(
@@ -517,3 +600,308 @@ class MClawTrainer:
             if isinstance(converted, SequenceABC) and not isinstance(converted, (str, bytes, bytearray)):
                 return list(converted)
         return None
+
+    def _build_dataproto_meta_info(self) -> dict[str, Any]:
+        actor_cfg = self._as_mapping(
+            self._resolve_nested_config_value(
+                self.config.actor_rollout_ref,
+                ("actor",),
+                default={},
+            )
+        )
+        rollout_cfg = self._as_mapping(
+            self._resolve_nested_config_value(
+                self.config.actor_rollout_ref,
+                ("rollout",),
+                default={},
+            )
+        )
+        return {
+            "micro_batch_size": int(actor_cfg.get("ppo_micro_batch_size_per_gpu", 1)),
+            "temperature": float(rollout_cfg.get("temperature", 1.0)),
+            "use_dynamic_bsz": bool(actor_cfg.get("use_dynamic_bsz", False)),
+        }
+
+    def _should_include_ref_log_prob(self) -> bool:
+        return bool(
+            self._resolve_nested_config_value(
+                self.config.actor_rollout_ref,
+                ("actor", "use_kl_loss"),
+                default=False,
+            )
+        )
+
+    def _build_dataloader(self) -> Any:
+        if self.tokenizer is None:
+            raise ValueError("tokenizer must be configured before calling fit()")
+
+        DataLoader = _import_dataloader()
+        dataset = self._build_dataset()
+        return DataLoader(
+            dataset,
+            batch_size=max(int(self.config.data.train_batch_size), 1),
+            shuffle=bool(self.config.data.shuffle),
+            num_workers=max(int(self.config.data.num_workers), 0),
+            drop_last=bool(self.config.data.drop_last),
+            collate_fn=_prompt_list_collate,
+        )
+
+    def _build_dataset(self) -> Any:
+        if self.config.data.use_verl_dataset:
+            return self._build_verl_dataset()
+
+        train_file = self.config.data.train_file.strip()
+        if not train_file:
+            raise ValueError("data.train_file must be set before calling fit()")
+        return _ListPromptDataset(_load_prompt_items_from_file(Path(train_file)))
+
+    def _build_verl_dataset(self) -> Any:
+        OmegaConf, RLHFDataset = _import_verl_dataset_components()
+        data_config = OmegaConf.create(
+            {
+                "cache_dir": self.config.data.cache_dir,
+                "prompt_key": self.config.data.prompt_key,
+                "max_prompt_length": self.config.data.max_prompt_length,
+                "max_response_length": self.config.data.max_response_length,
+            }
+        )
+        agentgym_config = OmegaConf.create(
+            {
+                "task_name": self.config.adapter.task_name,
+                "env_addr": self.config.adapter.env_addr,
+                "max_retries": self.config.adapter.max_retries,
+            }
+        )
+        return RLHFDataset(
+            data_file=self.config.data.train_file,
+            tokenizer=self.tokenizer,
+            data_config=data_config,
+            agentgym_config=agentgym_config,
+        )
+
+    def _normalize_prompt_batch(self, prompt_batch: Any) -> list[Any]:
+        if isinstance(prompt_batch, list):
+            items = prompt_batch
+        elif isinstance(prompt_batch, tuple):
+            items = list(prompt_batch)
+        else:
+            items = [prompt_batch]
+        return [self._normalize_prompt_item(item) for item in items]
+
+    def _normalize_prompt_item(self, item: Any) -> Any:
+        if isinstance(item, MappingABC):
+            normalized = {
+                str(key): _to_python_value(value)
+                for key, value in dict(item).items()
+            }
+            prompt_token_ids = normalized.get("prompt_token_ids")
+            input_ids = normalized.get("input_ids")
+            attention_mask = normalized.get("attention_mask")
+            if prompt_token_ids is None and isinstance(input_ids, list):
+                prompt_token_ids = [int(token_id) for token_id in input_ids]
+                if isinstance(attention_mask, list) and len(attention_mask) == len(prompt_token_ids):
+                    prompt_token_ids = [
+                        token_id
+                        for token_id, mask in zip(prompt_token_ids, attention_mask)
+                        if int(mask) != 0
+                    ]
+                normalized["prompt_token_ids"] = prompt_token_ids
+            if "item_id" not in normalized and "index" in normalized:
+                normalized["item_id"] = normalized["index"]
+            if "env_reset_kwargs" not in normalized and self.config.environment.reset_kwargs:
+                normalized["env_reset_kwargs"] = dict(self.config.environment.reset_kwargs)
+            return normalized
+        return _to_python_value(item)
+
+    def _load_checkpoint_if_needed(self) -> dict[str, Any]:
+        checkpoint_path = self._resolve_resume_checkpoint()
+        if checkpoint_path is None:
+            return {}
+
+        torch = _import_torch()
+        try:
+            state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            state = torch.load(checkpoint_path, map_location="cpu")
+        self.global_step = int(state.get("global_step", 0))
+        self._current_epoch = int(state.get("epoch", 0))
+        self._current_batch_index = int(state.get("batch_index", -1))
+
+        self._restore_state_dict(self._resolve_actor_module(), state.get("actor_module_state_dict"))
+        self._restore_state_dict(self._resolve_q_head(), state.get("q_head_state_dict"))
+        self._restore_optimizer_state(
+            getattr(self.q_critic, "optimizer", None),
+            state.get("q_critic_optimizer_state_dict"),
+        )
+        self._restore_optimizer_state(
+            self._resolve_actor_optimizer(),
+            state.get("actor_optimizer_state_dict"),
+        )
+        return state
+
+    def _resolve_resume_checkpoint(self) -> Path | None:
+        resume_from = self.config.trainer.resume_from.strip()
+        if not resume_from:
+            return None
+
+        resume_path = Path(resume_from)
+        if resume_path.is_file():
+            return resume_path
+        if resume_path.is_dir():
+            candidates = sorted(
+                resume_path.glob("global_step_*.pt"),
+                key=_checkpoint_sort_key,
+            )
+            if not candidates:
+                raise FileNotFoundError(f"no checkpoint files found under {resume_path}")
+            return candidates[-1]
+        raise FileNotFoundError(f"checkpoint path does not exist: {resume_path}")
+
+    def _resolve_checkpoint_dir(self) -> Path:
+        checkpoint_dir = self.config.trainer.checkpoint_dir.strip()
+        if checkpoint_dir:
+            return Path(checkpoint_dir)
+        return Path(self.config.trainer.default_local_dir)
+
+    def _resolve_actor_module(self) -> Any | None:
+        if self.q_critic is not None and getattr(self.q_critic, "actor_module_fsdp", None) is not None:
+            return self.q_critic.actor_module_fsdp
+        actor_impl = getattr(self.actor, "actor", None)
+        if actor_impl is not None:
+            return getattr(actor_impl, "actor_module", None)
+        return None
+
+    def _resolve_q_head(self) -> Any | None:
+        if self.q_critic is None:
+            return None
+        return getattr(self.q_critic, "q_head", None)
+
+    def _resolve_actor_optimizer(self) -> Any | None:
+        actor_impl = getattr(self.actor, "actor", None)
+        if actor_impl is None:
+            return None
+        return getattr(actor_impl, "actor_optimizer", None)
+
+    def _maybe_state_dict(self, module: Any) -> Any:
+        if module is None or not hasattr(module, "state_dict"):
+            return None
+        return module.state_dict()
+
+    def _maybe_optimizer_state_dict(self, optimizer: Any) -> Any:
+        if optimizer is None or not hasattr(optimizer, "state_dict"):
+            return None
+        return optimizer.state_dict()
+
+    def _restore_state_dict(self, module: Any, state_dict: Any) -> None:
+        if module is None or state_dict is None:
+            return
+        if hasattr(module, "load_state_dict"):
+            try:
+                module.load_state_dict(state_dict)
+            except RuntimeError:
+                module.load_state_dict(state_dict, strict=False)
+
+    def _restore_optimizer_state(self, optimizer: Any, state_dict: Any) -> None:
+        if optimizer is None or state_dict is None:
+            return
+        if hasattr(optimizer, "load_state_dict"):
+            optimizer.load_state_dict(state_dict)
+
+    def _as_mapping(self, value: Any) -> Mapping[str, Any]:
+        if isinstance(value, MappingABC):
+            return value
+        return {}
+
+
+class _ListPromptDataset:
+    def __init__(self, items: list[Any]) -> None:
+        self.items = items
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, index: int) -> Any:
+        return self.items[index]
+
+
+def _prompt_list_collate(batch: list[Any]) -> list[Any]:
+    return batch
+
+
+def _load_prompt_items_from_file(path: Path) -> list[Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"prompt data file does not exist: {path}")
+
+    if path.suffix == ".jsonl":
+        items = []
+        with path.open("r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"invalid JSONL record at {path}:{line_number}"
+                    ) from exc
+        return items
+
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("train", "data", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+    raise TypeError(f"unsupported prompt file payload in {path}")
+
+
+def _checkpoint_sort_key(path: Path) -> tuple[int, str]:
+    stem = path.stem
+    try:
+        return int(stem.rsplit("_", 1)[-1]), stem
+    except ValueError:
+        return -1, stem
+
+
+def _to_python_value(value: Any) -> Any:
+    if isinstance(value, MappingABC):
+        return {str(key): _to_python_value(item) for key, item in value.items()}
+    if isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray)):
+        return [_to_python_value(item) for item in value]
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return _to_python_value(tolist())
+        except (TypeError, ValueError):
+            return value
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
+def _import_torch() -> Any:
+    import torch
+
+    return torch
+
+
+def _import_dataloader() -> Any:
+    from torch.utils.data import DataLoader
+
+    return DataLoader
+
+
+def _import_verl_dataset_components() -> tuple[Any, Any]:
+    from omegaconf import OmegaConf
+    from verl.utils.agent_dataset.rl_dataset import RLHFDataset
+
+    return OmegaConf, RLHFDataset
