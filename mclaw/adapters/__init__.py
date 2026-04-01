@@ -4,7 +4,7 @@ from .actor_backend import VerlActorBackend
 from .env_client import AgentEnvClientAdapter
 from .dataproto_adapter import AdaptedActorBatch, DataProtoAdapter
 from .inference_engine import VerlInferenceEngine
-from .logger import StandardLogger
+from .logger import StandardLogger, build_tracker
 from .ref_policy import VerlReferencePolicy
 from .rollout_handler import RolloutMessage, VerlRolloutHandler
 
@@ -18,4 +18,5 @@ __all__ = [
     "VerlInferenceEngine",
     "VerlReferencePolicy",
     "VerlRolloutHandler",
+    "build_tracker",
 ]

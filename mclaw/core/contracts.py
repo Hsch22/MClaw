@@ -65,7 +65,7 @@ class TrajectoryStep:
 
 @dataclass(slots=True)
 class TrajectoryRecord:
-    """单条完整轨迹的本地表示。"""
+    """单条完整轨迹的本地表示；`responses` 仅包含 assistant action tokens。"""
 
     input_ids: list[int] = field(default_factory=list)
     responses: list[int] = field(default_factory=list)

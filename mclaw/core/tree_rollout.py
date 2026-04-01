@@ -3,6 +3,7 @@ from __future__ import annotations
 """树状 rollout 引擎接口。"""
 
 from collections.abc import Mapping, Sequence as SequenceABC
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -64,6 +65,7 @@ class TreeRollout:
         config: TreeRolloutConfig,
         env_client_factory: Callable[[], EnvironmentClientProtocol] | None = None,
         branch_selector: BranchSelector | None = None,
+        handler_factory: Callable[[Any, TreeNode], RolloutHandlerProtocol | None] | None = None,
     ) -> None:
         self.inference_engine = inference_engine
         self.actor_module_fsdp = actor_module_fsdp
@@ -73,6 +75,7 @@ class TreeRollout:
         self.config = config
         self.env_client_factory = env_client_factory
         self.branch_selector = branch_selector or BranchSelector()
+        self.handler_factory = handler_factory
         self._node_counter = 0
 
     def generate_tree_rollout(self, prompts: Any) -> TreeRolloutOutput:
@@ -82,6 +85,7 @@ class TreeRollout:
         for prompt_item in self._normalize_prompt_items(prompts):
             env_pool = self._initialize_env_pool(prompt_item)
             root = self._build_root_node(prompt_item)
+            root.metadata["rollout_handler"] = self._build_root_handler(prompt_item, root)
             roots.append(root)
 
             root_candidates = list(self._expand_root_candidates(root))
@@ -109,6 +113,7 @@ class TreeRollout:
                 branch = BranchRuntime(
                     env_index=branch_slot,
                     current_node=root_candidates[candidate_index],
+                    handler=self._clone_root_handler(root),
                     done=False,
                     metadata={
                         "prompt_item": prompt_item,
@@ -211,7 +216,10 @@ class TreeRollout:
             CandidateRequest(
                 owner_id=root.node_id,
                 parent=root,
-                state_tokens=list(root.state_tokens),
+                state_tokens=self._resolve_generation_prompt_tokens(
+                    fallback_tokens=root.state_tokens,
+                    handler=root.metadata.get("rollout_handler"),
+                ),
                 budget=self.config.root_budget,
             )
         ]
@@ -227,7 +235,10 @@ class TreeRollout:
             if branch.done:
                 continue
             parent = branch.current_node
-            state_tokens = parent.next_state_tokens or parent.state_tokens
+            state_tokens = self._resolve_generation_prompt_tokens(
+                fallback_tokens=parent.next_state_tokens or parent.state_tokens,
+                handler=branch.handler,
+            )
             requests.append(
                 CandidateRequest(
                     owner_id=branch.env_index,
@@ -356,6 +367,10 @@ class TreeRollout:
                 )
             if hasattr(branch.handler, "mark_done"):
                 branch.handler.mark_done(selected_node.done)
+            if hasattr(branch.handler, "score"):
+                branch.handler.score = float(getattr(branch.handler, "score", 0.0)) + float(
+                    env_step.reward
+                )
 
         branch.current_node = selected_node
         branch.done = selected_node.done
@@ -605,6 +620,7 @@ class TreeRollout:
                 "root_node_id": root.node_id,
                 "leaf_node_id": path[-1].node_id if path else root.node_id,
                 "flattened": True,
+                "prompt_length": len(root.state_tokens),
             },
         )
 
@@ -645,6 +661,8 @@ class TreeRollout:
             cursor += len(action_tokens)
 
             if observation_tokens:
+                # `responses` only tracks assistant action tokens. Observation tokens stay in
+                # the flattened sequence and are masked out from PPO loss.
                 record.input_ids.extend(observation_tokens)
                 record.attention_mask.extend([1] * len(observation_tokens))
                 record.position_ids.extend(range(cursor, cursor + len(observation_tokens)))
@@ -692,6 +710,36 @@ class TreeRollout:
     def _next_node_id(self, prefix: str) -> str:
         self._node_counter += 1
         return f"{prefix}-{self._node_counter}"
+
+    def _build_root_handler(
+        self,
+        prompt_item: Any,
+        root: TreeNode,
+    ) -> RolloutHandlerProtocol | None:
+        if self.handler_factory is None:
+            return None
+        return self.handler_factory(prompt_item, root)
+
+    def _clone_root_handler(self, root: TreeNode) -> RolloutHandlerProtocol | None:
+        handler = root.metadata.get("rollout_handler")
+        if handler is None:
+            return None
+        clone = getattr(handler, "clone", None)
+        if callable(clone):
+            return clone()
+        return deepcopy(handler)
+
+    def _resolve_generation_prompt_tokens(
+        self,
+        *,
+        fallback_tokens: Sequence[int],
+        handler: RolloutHandlerProtocol | None,
+    ) -> list[int]:
+        if handler is not None and hasattr(handler, "get_generation_prompt"):
+            prompt_token_ids = handler.get_generation_prompt(self.tokenizer)
+            if prompt_token_ids:
+                return [int(token_id) for token_id in prompt_token_ids]
+        return [int(token_id) for token_id in fallback_tokens]
 
 
 def _iter_all_nodes(roots: Sequence[TreeNode]) -> list[TreeNode]:

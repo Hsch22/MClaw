@@ -39,6 +39,7 @@ class MClawTrainer:
         clusterer: Any | None = None,
         env_client_factory: Any | None = None,
         branch_selector: Any | None = None,
+        rollout_handler_factory: Any | None = None,
         dataproto_adapter: DataProtoAdapter | None = None,
     ) -> None:
         self.config = config
@@ -54,6 +55,7 @@ class MClawTrainer:
         self.clusterer = clusterer
         self.env_client_factory = env_client_factory
         self.branch_selector = branch_selector
+        self.rollout_handler_factory = rollout_handler_factory
         self.dataproto_adapter = dataproto_adapter
         self.global_step = 0
         self._current_epoch = 0
@@ -81,6 +83,7 @@ class MClawTrainer:
             config=self.config.tree_rollout,
             env_client_factory=self.env_client_factory,
             branch_selector=self.branch_selector,
+            handler_factory=self.rollout_handler_factory,
         )
         return self.tree_rollout
 
@@ -166,7 +169,7 @@ class MClawTrainer:
 
     def adapt_auxiliary_batch(self, aux_actor_data: AuxiliaryBatch) -> Any:
         """将本地 AuxiliaryBatch 转成外部后端可接受的格式。"""
-        return list(aux_actor_data.samples)
+        return aux_actor_data
 
     def adapt_critic_batch(self, critic_data: CriticBatch) -> Any:
         """将本地 CriticBatch 转成 Q-head 更新所需格式。"""
@@ -189,15 +192,13 @@ class MClawTrainer:
         frozen_training_signals = self._snapshot_actor_training_signals(actor_data)
 
         ppo_epochs = self._resolve_ppo_epochs()
-        epoch_outputs: list[Mapping[str, float]] = []
-        for _ in range(ppo_epochs):
-            self._restore_actor_training_signals(actor_data, frozen_training_signals)
-            adapted_batch = self.adapt_actor_batch(actor_data)
-            self._apply_training_signals_to_adapted_batch(adapted_batch, frozen_training_signals)
-            epoch_outputs.append(dict(self.actor.update_policy(adapted_batch)))
+        self._restore_actor_training_signals(actor_data, frozen_training_signals)
+        adapted_batch = self.adapt_actor_batch(actor_data)
+        self._apply_training_signals_to_adapted_batch(adapted_batch, frozen_training_signals)
+        update_output = dict(self.actor.update_policy(adapted_batch))
 
         self._restore_actor_training_signals(actor_data, frozen_training_signals)
-        metrics.update(self._aggregate_float_metrics(epoch_outputs))
+        metrics.update(update_output)
         metrics["actor/ppo_epochs"] = float(ppo_epochs)
         return metrics
 
@@ -247,7 +248,7 @@ class MClawTrainer:
         return self._extract_scalar_metrics(output, prefix="ref_log_prob/")
 
     def update_auxiliary_loss(self, aux_actor_data: AuxiliaryBatch) -> Mapping[str, float]:
-        """兼容旧后端的独立 auxiliary update 路径；默认 train_step 不再调用。"""
+        """执行同簇 auxiliary policy gradient 更新。"""
         if self.actor is None or not aux_actor_data.samples:
             return {}
         adapted_batch = self.adapt_auxiliary_batch(aux_actor_data)
@@ -287,10 +288,13 @@ class MClawTrainer:
                 getattr(self.q_critic, "optimizer", None)
             ),
             "actor_optimizer_state_dict": self._maybe_optimizer_state_dict(
-                self._resolve_actor_optimizer()
+                self._resolve_actor_optimizer(),
+                module=self._resolve_actor_module(),
             ),
         }
-        torch.save(state, checkpoint_path)
+        if self._is_primary_process():
+            torch.save(state, checkpoint_path)
+        self._maybe_distributed_barrier()
 
     def _record_batch_signal(
         self,
@@ -736,6 +740,7 @@ class MClawTrainer:
         self._restore_optimizer_state(
             self._resolve_actor_optimizer(),
             state.get("actor_optimizer_state_dict"),
+            module=self._resolve_actor_module(),
         )
         return state
 
@@ -785,32 +790,73 @@ class MClawTrainer:
     def _maybe_state_dict(self, module: Any) -> Any:
         if module is None or not hasattr(module, "state_dict"):
             return None
+        fsdp_type = _try_import_fsdp()
+        if fsdp_type is not None and isinstance(module, fsdp_type):
+            return _get_fsdp_full_state_dict(module, rank0_only=True)
         return module.state_dict()
 
-    def _maybe_optimizer_state_dict(self, optimizer: Any) -> Any:
+    def _maybe_optimizer_state_dict(self, optimizer: Any, module: Any | None = None) -> Any:
         if optimizer is None or not hasattr(optimizer, "state_dict"):
             return None
+        fsdp_type = _try_import_fsdp()
+        if (
+            module is not None
+            and fsdp_type is not None
+            and isinstance(module, fsdp_type)
+            and hasattr(fsdp_type, "optim_state_dict")
+        ):
+            return fsdp_type.optim_state_dict(module, optimizer)
         return optimizer.state_dict()
 
     def _restore_state_dict(self, module: Any, state_dict: Any) -> None:
         if module is None or state_dict is None:
             return
         if hasattr(module, "load_state_dict"):
-            try:
-                module.load_state_dict(state_dict)
-            except RuntimeError:
-                module.load_state_dict(state_dict, strict=False)
+            fsdp_type = _try_import_fsdp()
+            if fsdp_type is not None and isinstance(module, fsdp_type):
+                load_result = _load_fsdp_full_state_dict(module, state_dict)
+            else:
+                load_result = module.load_state_dict(state_dict)
+            _validate_load_state_result(load_result, module=module)
 
-    def _restore_optimizer_state(self, optimizer: Any, state_dict: Any) -> None:
+    def _restore_optimizer_state(
+        self,
+        optimizer: Any,
+        state_dict: Any,
+        module: Any | None = None,
+    ) -> None:
         if optimizer is None or state_dict is None:
             return
         if hasattr(optimizer, "load_state_dict"):
+            fsdp_type = _try_import_fsdp()
+            if (
+                module is not None
+                and fsdp_type is not None
+                and isinstance(module, fsdp_type)
+                and hasattr(fsdp_type, "optim_state_dict_to_load")
+            ):
+                state_dict = fsdp_type.optim_state_dict_to_load(
+                    module,
+                    optimizer,
+                    state_dict,
+                )
             optimizer.load_state_dict(state_dict)
 
     def _as_mapping(self, value: Any) -> Mapping[str, Any]:
         if isinstance(value, MappingABC):
             return value
         return {}
+
+    def _is_primary_process(self) -> bool:
+        torch = _import_torch()
+        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+            return True
+        return int(torch.distributed.get_rank()) == 0
+
+    def _maybe_distributed_barrier(self) -> None:
+        torch = _import_torch()
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.barrier()
 
 
 class _ListPromptDataset:
@@ -905,3 +951,54 @@ def _import_verl_dataset_components() -> tuple[Any, Any]:
     from verl.utils.agent_dataset.rl_dataset import RLHFDataset
 
     return OmegaConf, RLHFDataset
+
+
+def _try_import_fsdp() -> Any | None:
+    try:
+        from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    except (ImportError, ModuleNotFoundError):
+        return None
+    return FSDP
+
+
+def _get_fsdp_full_state_dict(module: Any, *, rank0_only: bool) -> Any:
+    FSDP = _try_import_fsdp()
+    if FSDP is None:
+        return module.state_dict()
+    try:
+        from torch.distributed.fsdp import FullStateDictConfig, StateDictType
+    except (ImportError, ModuleNotFoundError):
+        return module.state_dict()
+    with FSDP.state_dict_type(
+        module,
+        StateDictType.FULL_STATE_DICT,
+        FullStateDictConfig(offload_to_cpu=True, rank0_only=rank0_only),
+    ):
+        return module.state_dict()
+
+
+def _load_fsdp_full_state_dict(module: Any, state_dict: Any) -> Any:
+    FSDP = _try_import_fsdp()
+    if FSDP is None:
+        return module.load_state_dict(state_dict)
+    try:
+        from torch.distributed.fsdp import FullStateDictConfig, StateDictType
+    except (ImportError, ModuleNotFoundError):
+        return module.load_state_dict(state_dict)
+    with FSDP.state_dict_type(
+        module,
+        StateDictType.FULL_STATE_DICT,
+        FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
+    ):
+        return module.load_state_dict(state_dict)
+
+
+def _validate_load_state_result(load_result: Any, *, module: Any) -> None:
+    missing_keys = list(getattr(load_result, "missing_keys", ()))
+    unexpected_keys = list(getattr(load_result, "unexpected_keys", ()))
+    if not missing_keys and not unexpected_keys:
+        return
+    raise RuntimeError(
+        "state_dict keys do not match module "
+        f"{type(module).__name__}: missing_keys={missing_keys}, unexpected_keys={unexpected_keys}"
+    )

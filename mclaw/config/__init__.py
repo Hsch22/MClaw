@@ -165,6 +165,7 @@ class LoggingConfig:
     tracker: str = "none"
     project_name: str = ""
     experiment_name: str = ""
+    tracker_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

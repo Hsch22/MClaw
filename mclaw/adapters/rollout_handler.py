@@ -157,6 +157,26 @@ class VerlRolloutHandler:
             },
         )
 
+    def clone(self) -> "VerlRolloutHandler":
+        return VerlRolloutHandler(
+            tokenizer=self.tokenizer,
+            messages=[message.to_dict() for message in self.messages],
+            task_name=self.task_name,
+            item_id=self.item_id,
+            score=float(self.score),
+            done=bool(self.done),
+            input_ids=list(self.input_ids),
+            attention_mask=list(self.attention_mask),
+            position_ids=list(self.position_ids),
+            loss_mask=list(self.loss_mask),
+            prompt_ids=list(self.prompt_ids),
+            max_response_len=int(self.max_response_len),
+            max_model_len=int(self.max_model_len),
+            chat_format=str(self.chat_format),
+            _assistant_spans=list(self._assistant_spans),
+            _step_advantages=list(self._step_advantages),
+        )
+
     def _build_chat_append(
         self,
         *,

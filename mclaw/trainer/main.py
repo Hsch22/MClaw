@@ -17,6 +17,8 @@ from mclaw.adapters import (
     VerlActorBackend,
     VerlInferenceEngine,
     VerlReferencePolicy,
+    VerlRolloutHandler,
+    build_tracker,
 )
 from mclaw.clustering import (
     HiddenStateClusterer,
@@ -117,6 +119,10 @@ def build_trainer(config: MClawTrainerConfig) -> MClawTrainer:
         rollout_sharding_manager=rollout_sharding_manager,
     )
     logger = _build_logger(config)
+    rollout_handler_factory = _build_rollout_handler_factory(
+        config=config,
+        tokenizer=tokenizer,
+    )
 
     tree_rollout = TreeRollout(
         inference_engine=inference_engine,
@@ -127,6 +133,7 @@ def build_trainer(config: MClawTrainerConfig) -> MClawTrainer:
         config=config.tree_rollout,
         env_client_factory=env_client_factory,
         branch_selector=branch_selector,
+        handler_factory=rollout_handler_factory,
     )
 
     return MClawTrainer(
@@ -143,6 +150,7 @@ def build_trainer(config: MClawTrainerConfig) -> MClawTrainer:
         clusterer=clusterer,
         env_client_factory=env_client_factory,
         branch_selector=branch_selector,
+        rollout_handler_factory=rollout_handler_factory,
         dataproto_adapter=dataproto_adapter,
     )
 
@@ -157,7 +165,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         config.trainer.resume_from = str(args.resume)
 
     trainer = build_trainer(config)
-    trainer.fit()
+    try:
+        trainer.fit()
+    finally:
+        logger = getattr(trainer, "logger", None)
+        close = getattr(logger, "close", None)
+        if callable(close):
+            close()
     return 0
 
 
@@ -277,6 +291,11 @@ def _build_actor_backend(
         actor=dp_actor,
         adapter=dataproto_adapter,
         dataproto_meta_info=_build_dataproto_meta_info(config),
+        aux_loss_config={
+            "coef": float(config.aux_loss.coef),
+            "use_same_advantage": bool(config.aux_loss.use_same_advantage),
+            "weighting": str(config.aux_loss.weighting),
+        },
     )
 
 
@@ -407,7 +426,15 @@ def _build_training_sharding_manager(
 def _build_logger(config: MClawTrainerConfig) -> StandardLogger:
     python_logger = logging.getLogger("mclaw")
     python_logger.setLevel(_resolve_log_level(config.logging.level))
-    return StandardLogger(python_logger=python_logger)
+    tracker = build_tracker(
+        tracker_name=config.logging.tracker,
+        project_name=config.logging.project_name,
+        experiment_name=config.logging.experiment_name,
+        default_local_dir=config.trainer.default_local_dir,
+        path_pattern=config.logging.path_pattern,
+        tracker_kwargs=config.logging.tracker_kwargs,
+    )
+    return StandardLogger(tracker=tracker, python_logger=python_logger)
 
 
 def _configure_python_logging(config: MClawTrainerConfig) -> None:
@@ -456,6 +483,85 @@ def _build_ref_dataproto_meta_info(config: MClawTrainerConfig) -> dict[str, Any]
         "temperature": float(rollout_cfg.get("temperature", 1.0)),
         "use_dynamic_bsz": bool(actor_cfg.get("use_dynamic_bsz", False)),
     }
+
+
+def _build_rollout_handler_factory(
+    *,
+    config: MClawTrainerConfig,
+    tokenizer: Any,
+) -> Any | None:
+    handler_name = str(config.adapter.rollout_handler).strip().lower()
+    if not handler_name or handler_name == "none":
+        return None
+    if handler_name != "verl":
+        raise NotImplementedError(
+            f"unsupported rollout handler adapter: {config.adapter.rollout_handler}"
+        )
+
+    rollout_cfg = _as_mapping(config.actor_rollout_ref.get("rollout"))
+    default_chat_format = _resolve_default_chat_format(config)
+    max_response_len = int(rollout_cfg.get("max_tokens", config.data.max_response_length))
+    max_model_len = int(
+        rollout_cfg.get("max_model_len", getattr(tokenizer, "model_max_length", 32768) or 32768)
+    )
+
+    def _factory(prompt_item: Any, root: Any) -> VerlRolloutHandler | None:
+        messages = _extract_prompt_messages(prompt_item)
+        prompt_ids = _extract_prompt_token_ids(prompt_item, root)
+        if not messages and not prompt_ids:
+            return None
+        return VerlRolloutHandler(
+            tokenizer=tokenizer,
+            messages=messages or [],
+            prompt_ids=prompt_ids,
+            task_name=str(config.adapter.task_name),
+            item_id=_extract_prompt_item_value(prompt_item, "item_id", "index"),
+            max_response_len=max_response_len,
+            max_model_len=max_model_len,
+            chat_format=str(
+                _extract_prompt_item_value(prompt_item, "chat_format") or default_chat_format
+            ),
+        )
+
+    return _factory
+
+
+def _extract_prompt_messages(prompt_item: Any) -> list[Any]:
+    messages = _extract_prompt_item_value(prompt_item, "messages", "prompt_messages")
+    if isinstance(messages, list):
+        return list(messages)
+    if isinstance(messages, tuple):
+        return list(messages)
+    return []
+
+
+def _extract_prompt_token_ids(prompt_item: Any, root: Any) -> list[int]:
+    token_ids = _extract_prompt_item_value(prompt_item, "prompt_token_ids", "input_ids")
+    if isinstance(token_ids, (list, tuple)):
+        return [int(token_id) for token_id in token_ids]
+    state_tokens = getattr(root, "state_tokens", None)
+    if isinstance(state_tokens, list):
+        return [int(token_id) for token_id in state_tokens]
+    return []
+
+
+def _extract_prompt_item_value(prompt_item: Any, *keys: str) -> Any:
+    for key in keys:
+        if isinstance(prompt_item, dict) and key in prompt_item:
+            return prompt_item[key]
+        if hasattr(prompt_item, key):
+            return getattr(prompt_item, key)
+    return None
+
+
+def _resolve_default_chat_format(config: MClawTrainerConfig) -> str:
+    family = str(config.model.family).strip().lower()
+    if family:
+        return family
+    model_path = _resolve_model_path(config).lower()
+    if "qwen" in model_path:
+        return "qwen"
+    return "qwen"
 
 
 def _build_actor_backend_config(config: MClawTrainerConfig) -> dict[str, Any]:

@@ -40,10 +40,10 @@ def compute_tree_advantage(
         key=lambda node: (node.depth, node.node_id or ""),
         reverse=True,
     )
+    parent_state_values = _cache_parent_state_values(executed_nodes)
 
     for node in executed_nodes:
-        current_children = node.parent.children if node.parent is not None else [node]
-        current_state_value = estimate_state_value(current_children)
+        current_state_value = parent_state_values[_parent_state_value_key(node)]
         if node.done:
             next_state_value = 0.0
         elif not node.children:
@@ -109,6 +109,21 @@ def _iter_executed_nodes(roots: Sequence[TreeNode]) -> list[TreeNode]:
         if node.executed:
             executed_nodes.append(node)
     return executed_nodes
+
+
+def _cache_parent_state_values(executed_nodes: Sequence[TreeNode]) -> dict[int, float]:
+    parent_state_values: dict[int, float] = {}
+    for node in executed_nodes:
+        parent_key = _parent_state_value_key(node)
+        if parent_key in parent_state_values:
+            continue
+        current_children = node.parent.children if node.parent is not None else [node]
+        parent_state_values[parent_key] = estimate_state_value(current_children)
+    return parent_state_values
+
+
+def _parent_state_value_key(node: TreeNode) -> int:
+    return id(node.parent) if node.parent is not None else id(node)
 
 
 def _is_finite_scalar(value: Any) -> bool:

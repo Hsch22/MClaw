@@ -229,7 +229,7 @@ class BaseClusterer(ABC):
         distances: torch.Tensor,
         n_clusters: int,
     ) -> torch.Tensor:
-        """通过重分配远离质心的样本，避免空簇。"""
+        """通过重分配远离质心的样本，必要时用最远点重置空簇。"""
         adjusted = labels.clone()
         counts = torch.bincount(adjusted, minlength=n_clusters)
         empty_clusters = (counts == 0).nonzero(as_tuple=False).flatten().tolist()
@@ -237,27 +237,96 @@ class BaseClusterer(ABC):
             return adjusted
 
         min_distances = distances.min(dim=1).values
-        donor_candidates = torch.argsort(min_distances, descending=True).tolist()
-        used_indices: set[int] = set()
+        donor_indices = self._collect_donor_indices(
+            labels=adjusted,
+            min_distances=min_distances,
+            n_clusters=n_clusters,
+        )
 
-        for empty_cluster in empty_clusters:
-            reassigned = False
-            for sample_index in donor_candidates:
-                if sample_index in used_indices:
-                    continue
+        if len(donor_indices) >= len(empty_clusters):
+            for empty_cluster, sample_index in zip(empty_clusters, donor_indices):
                 donor_cluster = int(adjusted[sample_index].item())
-                if counts[donor_cluster] <= 1:
-                    continue
                 adjusted[sample_index] = empty_cluster
                 counts[donor_cluster] -= 1
                 counts[empty_cluster] += 1
-                used_indices.add(sample_index)
-                reassigned = True
-                break
-            if not reassigned:
-                raise RuntimeError("failed to rebalance empty clusters")
+            return adjusted
+
+        adjusted = self._reseed_empty_clusters(
+            labels=adjusted,
+            min_distances=min_distances,
+            n_clusters=n_clusters,
+        )
+        counts = torch.bincount(adjusted, minlength=n_clusters)
+        if (counts == 0).any():
+            raise RuntimeError("failed to reseed empty clusters")
 
         return adjusted
+
+    def _collect_donor_indices(
+        self,
+        labels: torch.Tensor,
+        min_distances: torch.Tensor,
+        n_clusters: int,
+    ) -> list[int]:
+        donor_indices: list[int] = []
+        for cluster_id in range(n_clusters):
+            member_indices = (labels == cluster_id).nonzero(as_tuple=False).flatten().tolist()
+            if len(member_indices) <= 1:
+                continue
+            member_indices.sort(key=lambda index: float(min_distances[index]), reverse=True)
+            donor_indices.extend(member_indices[:-1])
+
+        donor_indices.sort(key=lambda index: float(min_distances[index]), reverse=True)
+        return donor_indices
+
+    def _reseed_empty_clusters(
+        self,
+        labels: torch.Tensor,
+        min_distances: torch.Tensor,
+        n_clusters: int,
+    ) -> torch.Tensor:
+        adjusted = labels.clone()
+        counts = torch.bincount(adjusted, minlength=n_clusters)
+        empty_clusters = (counts == 0).nonzero(as_tuple=False).flatten().tolist()
+        if not empty_clusters:
+            return adjusted
+
+        ranked_indices = torch.argsort(min_distances, descending=True).tolist()
+        used_indices: set[int] = set()
+
+        for empty_cluster in empty_clusters:
+            sample_index = self._select_reseed_sample(
+                labels=adjusted,
+                counts=counts,
+                ranked_indices=ranked_indices,
+                used_indices=used_indices,
+            )
+            if sample_index is None:
+                break
+
+            donor_cluster = int(adjusted[sample_index].item())
+            adjusted[sample_index] = empty_cluster
+            counts[donor_cluster] -= 1
+            counts[empty_cluster] += 1
+            used_indices.add(sample_index)
+
+        return adjusted
+
+    def _select_reseed_sample(
+        self,
+        labels: torch.Tensor,
+        counts: torch.Tensor,
+        ranked_indices: Sequence[int],
+        used_indices: set[int],
+    ) -> int | None:
+        for sample_index in ranked_indices:
+            if sample_index in used_indices:
+                continue
+            donor_cluster = int(labels[sample_index].item())
+            if counts[donor_cluster] <= 1:
+                continue
+            return sample_index
+        return None
 
     def _select_representatives(
         self,
