@@ -21,7 +21,7 @@ class AgentEnvClientAdapter:
     def reset(self, item_id: Any, **kwargs: Any) -> Any:
         """重置环境并返回 reset 后的 observation。"""
         del kwargs
-        self.client.reset(item_id)
+        self.client.reset(_coerce_item_id(item_id))
         return self.observe()
 
     def observe(self) -> Any:
@@ -32,6 +32,29 @@ class AgentEnvClientAdapter:
         raw_step = self.client.step(action, **kwargs)
         next_state, reward, done, metadata = _coerce_env_step(raw_step)
         return next_state, reward, done, metadata
+
+
+def _coerce_item_id(item_id: Any) -> int:
+    """将 item_id 转为整数索引。
+
+    AgentGym 训练数据的 item_id 格式为 ``"task_N"``（如 ``"textcraft_31"``），
+    而环境服务器的 reset 接口期望整数 ``data_idx``。
+    """
+    if isinstance(item_id, int):
+        return item_id
+    s = str(item_id).strip()
+    # "textcraft_31" → 31
+    parts = s.rsplit("_", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return int(parts[1])
+    # 纯数字字符串
+    if s.isdigit():
+        return int(s)
+    # fallback: 尝试直接 int()
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return 0
 
 
 def _coerce_env_step(raw_step: Any) -> tuple[Any, float, bool, Mapping[str, Any]]:

@@ -65,4 +65,9 @@ class QHead(nn.Module):
                 f"expected hidden_states dim {self.hidden_dim}, "
                 f"got {hidden_states.size(-1)}"
             )
+        # QHead 参数默认 float32，而 backbone 输出通常 bfloat16，
+        # 统一到 QHead 参数 dtype 避免 matmul dtype 不匹配。
+        param_dtype = next(self.mlp.parameters()).dtype
+        if hidden_states.dtype != param_dtype:
+            hidden_states = hidden_states.to(param_dtype)
         return self.mlp(hidden_states).squeeze(-1)

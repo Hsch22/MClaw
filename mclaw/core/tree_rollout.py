@@ -85,6 +85,16 @@ class TreeRollout:
         for prompt_item in self._normalize_prompt_items(prompts):
             env_pool = self._initialize_env_pool(prompt_item)
             root = self._build_root_node(prompt_item)
+            # 若数据集只有 item_id 而没有 prompt，则用环境 reset 后的
+            # observation 作为初始状态文本，以便构建有效的 generation prompt。
+            if not root.state_tokens and env_pool:
+                obs = env_pool[0].observe()
+                if obs:
+                    obs_text = str(obs)
+                    root.state_text = obs_text
+                    root.state_tokens = list(
+                        self.tokenizer.encode(obs_text, add_special_tokens=False)
+                    )
             root.metadata["rollout_handler"] = self._build_root_handler(prompt_item, root)
             roots.append(root)
 

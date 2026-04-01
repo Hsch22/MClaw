@@ -71,7 +71,7 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 
 ```bash
 python -c "from flash_attn.bert_padding import pad_input; print('flash-attn OK')"
-python -c "from verl.workers.actor.dp_actor import DataParallelPPOActor; print('verl dp_actor OK')"
+python -c "from verl.workers.agent_actor.dp_actor import DataParallelPPOActor; print('verl dp_actor OK')"
 ```
 
 ---

@@ -510,6 +510,14 @@ def _build_rollout_handler_factory(
         prompt_ids = _extract_prompt_token_ids(prompt_item, root)
         if not messages and not prompt_ids:
             return None
+        # 若数据集只有 item_id，messages 为空但 root 已有来自环境观测的
+        # state_tokens/state_text，则构造一条 user message 让 chat template
+        # 能正常生成 generation prompt。
+        if not messages and prompt_ids:
+            obs_text = getattr(root, "state_text", None)
+            if obs_text:
+                from mclaw.adapters.rollout_handler import RolloutMessage
+                messages = [RolloutMessage(role="user", content=str(obs_text))]
         return VerlRolloutHandler(
             tokenizer=tokenizer,
             messages=messages or [],
@@ -555,9 +563,6 @@ def _extract_prompt_item_value(prompt_item: Any, *keys: str) -> Any:
 
 
 def _resolve_default_chat_format(config: MClawTrainerConfig) -> str:
-    family = str(config.model.family).strip().lower()
-    if family:
-        return family
     model_path = _resolve_model_path(config).lower()
     if "qwen" in model_path:
         return "qwen"
@@ -718,7 +723,7 @@ def _import_fsdp() -> Any:
 
 def _import_verl_actor_backend() -> tuple[Any, Any]:
     from omegaconf import OmegaConf
-    from verl.workers.actor.dp_actor import DataParallelPPOActor
+    from verl.workers.agent_actor.dp_actor import DataParallelPPOActor
 
     return DataParallelPPOActor, OmegaConf
 
