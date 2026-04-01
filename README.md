@@ -1,10 +1,80 @@
 # MClaw
 
-环境为
-agentgym-rl-qwen3-clean     /mnt/kangshijia/wangbinyu/conda_envs/agentgym-rl-qwen3-clean
-agentenv-webarena        /mnt/kangshijia/wangbinyu/conda_envs/agentenv-webarena
+## 环境（Conda）
 
+- `agentgym-rl-qwen3-clean`：`/mnt/kangshijia/wangbinyu/conda_envs/agentgym-rl-qwen3-clean`
+- `agentenv-webarena`：`/mnt/kangshijia/wangbinyu/conda_envs/agentenv-webarena`
+- 与 AgentGym-RL / `verl` 联调时常用：`mclaw-train` → `/mnt/kangshijia/wangbinyu/conda_envs/mclaw-train`（需在该环境中安装 `verl`、`vllm` 等栈）
 
+## CUDA Toolkit、`CUDA_HOME` 与 `nvcc`
+
+项目根目录（`MClaw` 的上级）下常放置与 PyTorch **`cu124`** 对齐的 **CUDA 12.4** 工具链，例如：
+
+`/mnt/kangshijia/husicheng/.local/cuda-12.4`
+
+该路径下的 `nvcc` **默认不在系统 `PATH`**，新开终端需先导出再编译 CUDA 扩展或安装会从源码构建的包：
+
+```bash
+export CUDA_HOME=/mnt/kangshijia/husicheng/.local/cuda-12.4
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
+nvcc --version   # 应显示 release 12.4
+```
+
+不建议用 `sudo apt install nvidia-cuda-toolkit` 与上述 12.4 混用，除非整台机统一改用发行版提供的 Toolkit 版本。
+
+若未设置 `CUDA_HOME` 就执行 `pip install flash-attn` 等，可能在元数据阶段失败，提示 `CUDA_HOME environment variable is not set` 或找不到 `nvcc`。
+
+## flash-attn（`verl` / `DataParallelPPOActor` 等）
+
+部分依赖会 `import flash_attn`。任选其一即可。
+
+**1. 预编译 wheel（推荐，可不配置 `nvcc`）**
+
+先确认版本：
+
+```bash
+python -c "import torch; print(torch.__version__, torch.version.cuda)"
+```
+
+示例（Torch 2.6 + CUDA 12.x + Python 3.10；版本与文件名以 [flash-attention Releases](https://github.com/Dao-AILab/flash-attention/releases) 为准）：
+
+```bash
+pip install flash-attn --no-build-isolation -f https://github.com/Dao-AILab/flash-attention/releases/expanded_assets/v2.7.4.post1
+```
+
+若仍触发源码构建，从 Release 页选择匹配 `cu12`、`torch2.6`、`cp310` 以及 **cxx11 ABI** 的 `.whl` 直链安装。ABI 检查：
+
+```bash
+python -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
+```
+
+**2. 源码编译**
+
+在同一 shell 中先完成上文「`CUDA_HOME` + `PATH` + `LD_LIBRARY_PATH`」，且 `nvcc --version` 正常后：
+
+```bash
+MAX_JOBS=4 pip install flash-attn --no-build-isolation
+```
+
+## vLLM 注意力后端（可选）
+
+与仓库根目录 `single-machine.md`、`script/b_train_textcraft.sh` 等一致时，可用 XFormers 避免走 FlashAttention 内核：
+
+```bash
+export VLLM_USE_MODELSCOPE=0
+export VLLM_WORKER_MULTIPROC_METHOD=spawn
+export VLLM_ATTENTION_BACKEND=XFORMERS
+```
+
+## 自检
+
+```bash
+python -c "from flash_attn.bert_padding import pad_input; print('flash-attn OK')"
+python -c "from verl.workers.actor.dp_actor import DataParallelPPOActor; print('verl dp_actor OK')"
+```
+
+---
 
 MClaw 是一个面向 Agent RL 的树状 rollout prototype。当前代码不再只是“空骨架”: `TreeRollout`、`BaseClusterer`、`QCritic`、`compute_tree_advantage()` 和 `MClawTrainer.train_step()` 都已经有可执行的原型逻辑；仍然缺的是配置加载、外部后端适配、`fit()` 主循环和端到端联调。
 

@@ -60,4 +60,5 @@
   - `verl`
   - `vllm`
   - `agentenv`
+- **`CUDA_HOME` / `nvcc`、flash-attn 预编译或源码安装、可选 vLLM `XFORMERS`**：见仓库根目录 [`README.md`](../../README.md) 中「CUDA Toolkit」「flash-attn」「vLLM」三节。
 - `FSDP` 只有在 `torch.distributed` 已初始化时才会启用；否则会直接报错而不是静默假装成功。

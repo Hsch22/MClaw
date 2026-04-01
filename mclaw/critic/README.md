@@ -18,7 +18,7 @@
 
 ## 当前行为
 
-- 被执行节点的真实 TD target 会覆盖 `node.q_value`，后续状态值估计优先读修正后的 `q_value`。
+- 被执行节点的真实 TD target 会覆盖 `node.q_value`，但同一父节点下的 `V(s)` baseline 会先缓存，避免兄弟节点之间互相污染。
 - `estimate_state_value()` 的优先级是：
   - 所有候选动作的 `q_value`
   - executed child 的 `td_target`

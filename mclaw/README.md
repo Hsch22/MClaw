@@ -1,5 +1,7 @@
 # mclaw
 
+Conda、`CUDA_HOME` / `nvcc`、flash-attn 与 vLLM 环境说明见上级目录 [README.md](../README.md)。
+
 `mclaw/` 是仓库的主包目录。当前它不再只是 prototype 接口集合，而是已经具备一条可装配的本地训练链路：
 
 - 配置加载

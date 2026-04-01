@@ -578,6 +578,9 @@ def _build_actor_backend_config(config: MClawTrainerConfig) -> dict[str, Any]:
         "use_kl_loss": False,
         "ulysses_sequence_parallel_size": 1,
         "use_remove_padding": bool(config.model.use_remove_padding),
+        "entropy_from_logits_with_chunking": False,
+        "entropy_checkpointing": False,
+        "fsdp_config": {"dtype": "bfloat16"},
         "optim": {
             "lr": 1e-6,
         },
@@ -715,7 +718,7 @@ def _import_fsdp() -> Any:
 
 def _import_verl_actor_backend() -> tuple[Any, Any]:
     from omegaconf import OmegaConf
-    from verl.workers.agent_actor.dp_actor import DataParallelPPOActor
+    from verl.workers.actor.dp_actor import DataParallelPPOActor
 
     return DataParallelPPOActor, OmegaConf
 
