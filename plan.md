@@ -210,15 +210,15 @@ algorithm:
 
 ## 实现顺序
 
-**Phase 1 — 基础框架:** 项目骨架 + `tree_node.py` + `q_head.py` + `clustering/base.py`
+**Phase 1 — 基础框架 ✅:** 项目骨架 + `tree_node.py` + `q_head.py` + `clustering/base.py`
 
-**Phase 2 — 核心引擎:** `logprob.py`（baseline 聚类）→ `q_critic.py` → `advantage.py` → `branch_selector.py` → `tree_rollout.py`
+**Phase 2 — 核心引擎 ✅:** `logprob.py`（baseline 聚类）→ `q_critic.py` → `advantage.py` → `branch_selector.py` → `tree_rollout.py`
 
-**Phase 3 — 训练循环:** `mclaw_trainer.py` + `main.py` + 配置文件 + 示例脚本
+**Phase 3 — 训练循环 ✅:** `mclaw_trainer.py` + `main.py` + 配置文件 + 示例脚本
 
-**Phase 4 — 聚类升级:** `hidden_state.py`（主方案）→ `output_grad.py`（fallback）→ `vllm_hooks.py`
+**Phase 4 — 聚类升级 ✅:** `hidden_state.py`（主方案）→ `output_grad.py`（fallback）→ `vllm_hooks.py`
 
-**Phase 5 — 集成:** 适配层对接 AgentGym-RL → agentenv 环境集成 → 端到端测试
+**Phase 5 — 集成（进行中）:** 适配层对接 AgentGym-RL ✅ → agentenv 环境集成 ✅ → 端到端联调 🔜
 
 ## 关键设计决策
 
