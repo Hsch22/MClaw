@@ -14,6 +14,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```bash
 cd /path/to/MClaw
 
+# MClaw 训练环境当前固定使用 Python 3.12
+# 如本机未安装，可先执行: uv python install 3.12
+
 # 创建 venv 并安装 core + train 依赖
 uv sync --group train
 
@@ -21,6 +24,9 @@ uv sync --group train
 export PYTHONPATH="/path/to/AgentGym-RL/AgentGym-RL:$PYTHONPATH"
 ```
 
+> 项目根目录中的 `.python-version` 已固定为 `3.12`，`pyproject.toml` 中也限制为 `<3.13`，
+> 因为当前 `xformers` 预编译 wheel 仅覆盖 `cp310`/`cp311`/`cp312`。
+>
 > **注意**: `flash-attn` 需要匹配的 CUDA toolkit，如果安装失败可先跳过：
 > `uv sync --group train --exclude flash-attn` 然后手动编译安装。
 
