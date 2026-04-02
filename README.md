@@ -101,7 +101,7 @@ MClaw/
 ├── README.md
 ├── plan.md
 ├── integration_guide.md
-├── setup.py
+├── pyproject.toml
 ├── examples/
 │   ├── README.md
 │   └── textcraft_train.sh
@@ -190,6 +190,6 @@ MClaw 的目标仍然是语义兼容，而不是源码耦合。
 
 ## 入口和示例
 
-- `setup.py` 已注册 `mclaw-train=mclaw.trainer.main:main`
+- `pyproject.toml` 已注册 `mclaw-train=mclaw.trainer.main:main`
 - `examples/textcraft_train.sh` 展示了目标 CLI 形状
 - `integration_guide.md` 提供 15 步联调指南（含正确的 CLI override 语法 `mclaw.` 前缀）
