@@ -65,7 +65,10 @@ packages = ["mclaw"]
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
-conflicting-groups = [["train", "envserver"]]
+conflicts = [[
+    { group = "train" },
+    { group = "envserver" },
+]]
 
 [tool.uv.extra-build-dependencies]
 flash-attn = ["torch"]
