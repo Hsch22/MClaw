@@ -13,7 +13,6 @@ dependencies = [
     "omegaconf==2.3.0",
     "tensordict==0.6.2",
     "torch==2.6.0",
-    "transformers==4.51.3",
 ]
 
 [project.scripts]
@@ -41,6 +40,7 @@ train = [
     "tensorboard==2.20.0",
     "tensordict==0.6.2",
     "tiktoken==0.12.0",
+    "transformers==4.51.3",
     "vllm==0.8.5.post1",
     "wandb==0.25.1",
     "xformers==0.0.29.post2",
@@ -48,12 +48,12 @@ train = [
 envserver = [
     "agentenv @ git+https://github.com/WooooDyy/AgentGym.git@640f8bca#subdirectory=agentenv",
     "agentenv-textcraft @ git+https://github.com/WooooDyy/AgentGym.git@640f8bca#subdirectory=agentenv-textcraft",
-    "fastapi>=0.135.0",
-    "gymnasium>=1.2.0",
-    "openai>=2.0.0",
-    "torch>=2.6.0",
-    "transformers>=5.0.0",
-    "uvicorn>=0.42.0",
+    "fastapi==0.135.2",
+    "gymnasium==1.2.3",
+    "openai==2.30.0",
+    "torch==2.6.0",
+    "transformers==5.4.0",
+    "uvicorn==0.42.0",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -65,6 +65,7 @@ packages = ["mclaw"]
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+conflicting-groups = [["train", "envserver"]]
 
 [tool.uv.extra-build-dependencies]
 flash-attn = ["torch"]
