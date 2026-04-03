@@ -16,6 +16,10 @@
     - `advantages`
     - `old_log_probs`
     - `ref_log_prob`
+  - `alignment` 参数：`"continuation"` / `"full"` / `"response"` / `"auto"`，
+    消除多轨迹 padding 时的长度歧义
+  - **左 padding 布局**：`input_ids` = 左 pad prompt + 右 pad continuation，
+    对齐 verl 的 `[:, -response_length-1:-1]` 切片约定
 - `actor_backend.py`
   - `VerlActorBackend`
   - 包装 `DataParallelPPOActor` 风格后端
@@ -46,9 +50,10 @@
   - 原因：当前 `TrajectoryRecord.responses` 只保留 action token，不包含 observation token
   - verl 的 actor log-prob / PPO 侧需要的是完整 continuation，再用 `response_mask` 标出真正参与 loss 的位置
 - MClaw 内部保存的是 full-sequence `old_log_probs` / `ref_log_probs`
-  - 适配层会把 verl 返回的 continuation 张量扩展回 full sequence，再写回 `TrajectoryRecord`
+  - 适配层通过 `expand_signal_to_full_sequences(alignment="continuation")` 把 verl 返回的 continuation 张量截取到各轨迹实际长度，前补 prompt zeros，再写回 `TrajectoryRecord`
 - trainer 现在会先构造 `AdaptedActorBatch`
   - backend 读取其中的 `DataProto`
   - 同时保留对源 `ActorBatch` 的引用，避免 log-prob 写回链路丢失
 - 适配层本身不做 Ray worker / sharding manager 调度
-  - 这些仍由 `trainer/` 的训练循环负责
+  - 独立模式下由 `trainer/` 的训练循环负责
+  - Ray 模式下由 `ActorRolloutRefWorker` 和 `MClawTreeRollout` 负责

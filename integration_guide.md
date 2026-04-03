@@ -378,3 +378,46 @@ CUDA_VISIBLE_DEVICES=0 \
   mclaw.tree_rollout.intra_branch_clusters=1 \
   mclaw.tree_rollout.max_rounds=2
 ```
+
+## 16. Ray 分布式训练（推荐生产用法）
+
+Ray 模式将 MClaw 的 `TreeRollout` 嵌入 AgentGym-RL 的 `RayPPOTrainer`，
+支持多 GPU 并行训练。
+
+### 前提
+
+- AgentGym-RL 仓库可用：`/mnt/kangshijia/husicheng/AgentGym-RL/AgentGym-RL`
+- 两个仓库都在 `feature/ray-integration` 分支
+- 环境服务器已启动
+
+### 启动
+
+```bash
+cd /mnt/kangshijia/husicheng/MClaw
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export WANDB_API_KEY="your_key"
+bash examples/run_textcraft_ray_train.sh
+```
+
+### 关键配置差异（vs 独立模式）
+
+| 参数 | 独立模式 | Ray 模式 |
+|------|----------|----------|
+| 入口 | `mclaw.trainer.main` | `verl.agent_trainer.main_ppo` |
+| rollout | MClaw `TreeRollout` 直接调用 | `MClawTreeRollout` 包装在 Ray worker 内 |
+| `rollout.name` | N/A | `mclaw` |
+| `adv_estimator` | N/A | `mclaw` |
+| 并行度 | 单进程，`batch_size=1` | Ray DP，每 GPU 处理 `batch_size/n_gpus` 条 |
+| 环境交互 | 串行 | `ThreadPoolExecutor` 并行 |
+| FSDP | 可选 | 由 Ray worker 自动管理 |
+
+### 自定义参数
+
+通过 Hydra override 传递（注意 MClaw 参数在 `actor_rollout_ref.mclaw.` 下）：
+
+```bash
+bash examples/run_textcraft_ray_train.sh \
+  actor_rollout_ref.mclaw.tree_rollout.root_budget=128 \
+  actor_rollout_ref.mclaw.tree_rollout.n_envs=8 \
+  trainer.n_gpus_per_node=4
+```
