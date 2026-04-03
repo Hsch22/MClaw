@@ -162,8 +162,8 @@ run_train() {
         \
         data.train_file="${DATA_FILE}" \
         data.train_batch_size=1 \
-        data.max_prompt_length=1024 \
-        data.max_response_length=512 \
+        data.max_prompt_length=512 \
+        data.max_response_length=10240 \
         \
         model.family="${MODEL_PATH}" \
         model.model_path="${MODEL_PATH}" \
@@ -197,11 +197,11 @@ run_train() {
         \
         mclaw.aux_loss.coef=0.2 \
         \
-        actor_rollout_ref.rollout.max_tokens=128 \
-        actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
-        actor_rollout_ref.rollout.max_model_len=4096 \
+        actor_rollout_ref.rollout.max_tokens=512 \
+        actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+        actor_rollout_ref.rollout.max_model_len=32768 \
         actor_rollout_ref.rollout.temperature=1.0 \
-        actor_rollout_ref.rollout.n=1 \
+        actor_rollout_ref.rollout.n=8 \
         actor_rollout_ref.rollout.logprobs=1 \
         \
         actor_rollout_ref.actor.ppo_epochs=1 \
