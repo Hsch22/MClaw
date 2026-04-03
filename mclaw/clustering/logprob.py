@@ -66,7 +66,7 @@ class LogProbClusterer(BaseClusterer):
             if key in model_outputs:
                 return self._coerce_sample_sequences(model_outputs[key])
 
-        outputs = model_outputs.get("outputs")
+        outputs = model_outputs.get("outputs") or model_outputs.get("generation_output")
         if outputs is not None:
             sample_sequences: list[Any] = []
             for output in self._coerce_sample_sequences(outputs):
@@ -76,7 +76,7 @@ class LogProbClusterer(BaseClusterer):
         available_keys = ", ".join(sorted(model_outputs.keys()))
         raise KeyError(
             "model_outputs must contain one of "
-            "'action_logprobs', 'token_logprobs', 'logprobs', or 'outputs'; "
+            "'action_logprobs', 'token_logprobs', 'logprobs', 'generation_output', or 'outputs'; "
             f"got keys: [{available_keys}]"
         )
 
