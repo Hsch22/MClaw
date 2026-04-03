@@ -183,13 +183,20 @@ class QCritic:
                 )
 
                 with torch.no_grad():
-                    model_outputs = self.actor_module_fsdp(
+                    # 使用 base model（跳过 lm_head）避免计算巨大的 logits 张量。
+                    # CausalLM.lm_head 将 hidden_states 投影到 vocab_size（~152K），
+                    # 32 × seq_len × 152K × 2B ≈ 30GB，完全不需要。
+                    backbone = getattr(self.actor_module_fsdp, "model", self.actor_module_fsdp)
+                    model_outputs = backbone(
                         input_ids=chunk_input_ids,
                         attention_mask=chunk_attention_mask,
                         output_hidden_states=True,
                         return_dict=True,
                     )
-                    last_hidden_state = _resolve_last_hidden_state(model_outputs)
+                    # base model 直接返回 last_hidden_state
+                    last_hidden_state = getattr(model_outputs, "last_hidden_state", None)
+                    if last_hidden_state is None:
+                        last_hidden_state = _resolve_last_hidden_state(model_outputs)
                     # 仅提取 action 最后一个 token 的 hidden state，立即释放其余张量
                     chunk_hidden = last_hidden_state[
                         torch.arange(last_hidden_state.size(0), device=device),
