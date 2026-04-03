@@ -687,11 +687,20 @@ def _resolve_module_device(module: Any) -> Any | None:
 
 
 def _import_verl_policy_update_helpers() -> tuple[Any, Any, Any, Any, Any, Any]:
+    import torch as _torch
     from verl.agent_trainer.ppo.core_algos import kl_penalty, compute_policy_loss
-    from verl.utils.device import get_device_id
     from verl.utils.py_functional import append_to_dict
-    from verl.utils.seqlen_balancing import prepare_dynamic_batch
+    from verl.utils.seqlen_balancing import rearrange_micro_batches
     import verl.utils.torch_functional as verl_F
+
+    def get_device_id() -> int:
+        return _torch.cuda.current_device() if _torch.cuda.is_available() else 0
+
+    def prepare_dynamic_batch(batch: Any, max_token_len: int = 0) -> tuple[list[Any], Any]:
+        """Compatibility shim: delegate to rearrange_micro_batches."""
+        if max_token_len > 0:
+            return rearrange_micro_batches(batch, max_token_len=max_token_len)
+        return [batch], None
 
     def agg_loss(loss_mat: Any, loss_mask: Any, loss_agg_mode: str = "mean") -> Any:
         """Aggregate a per-token loss matrix using a mask."""
