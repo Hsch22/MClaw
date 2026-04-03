@@ -81,6 +81,12 @@ def build_trainer(config: MClawTrainerConfig) -> MClawTrainer:
     """根据配置组装训练器和外部后端适配器。"""
     _configure_python_logging(config)
 
+    # 若启用 FSDP，确保 torch.distributed 已初始化（torchrun 设置了环境变量但不会自动 init）
+    if bool(config.distributed.enable_fsdp):
+        torch = _import_torch()
+        if torch.distributed.is_available() and not torch.distributed.is_initialized():
+            torch.distributed.init_process_group(backend="nccl")
+
     tokenizer = _build_tokenizer(config)
     actor_module = _build_actor_module(config)
     actor_module_fsdp = _wrap_model_with_fsdp_if_enabled(actor_module, config)
