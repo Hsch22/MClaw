@@ -147,17 +147,22 @@ class TreeRollout:
                         branch.done = True
                         continue
 
-                    cluster_result = self._cluster_branch_candidates(branch, candidates)
-                    selection = self.branch_selector.select_branch_action(
-                        candidates=candidates,
-                        representative_indices=cluster_result.representative_indices,
-                        cluster_labels=cluster_result.labels,
-                    )
+                    if self.config.intra_branch_clusters > 1:
+                        # 聚类选择：先聚类，再从各簇代表中选最优，同簇其他候选作为 aux samples
+                        cluster_result = self._cluster_branch_candidates(branch, candidates)
+                        selection = self.branch_selector.select_branch_action(
+                            candidates=candidates,
+                            representative_indices=cluster_result.representative_indices,
+                            cluster_labels=cluster_result.labels,
+                        )
+                        branch.current_node.metadata["cluster_labels"] = list(cluster_result.labels)
+                        branch.current_node.metadata["representative_indices"] = list(
+                            cluster_result.representative_indices
+                        )
+                    else:
+                        # 直接选择：跳过聚类，选 Q-value 最高的候选，所有其他候选作为 aux samples
+                        selection = self._select_branch_greedy(candidates)
                     branch.current_node.metadata["selection"] = selection
-                    branch.current_node.metadata["cluster_labels"] = list(cluster_result.labels)
-                    branch.current_node.metadata["representative_indices"] = list(
-                        cluster_result.representative_indices
-                    )
 
                     selected_node = candidates[selection.selected_index]
                     selected_node.branch_id = branch.env_index
@@ -342,6 +347,51 @@ class TreeRollout:
             nodes=candidates,
             n_clusters=self.config.intra_branch_clusters,
             model_outputs=model_outputs,
+        )
+
+    def _select_branch_greedy(self, candidates: Sequence[TreeNode]) -> "SelectionResult":
+        """跳过聚类，直接选 Q-value 最高的候选。其余全部作为 auxiliary samples。"""
+        import math as _math
+        from .branch_selector import SelectionResult
+
+        best_index = 0
+        best_score = float("-inf")
+        for i, node in enumerate(candidates):
+            score = float("-inf")
+            for val in (node.q_value, node.log_prob):
+                if val is not None:
+                    try:
+                        s = float(val)
+                        if not _math.isnan(s):
+                            score = s
+                            break
+                    except (TypeError, ValueError):
+                        continue
+            if score > best_score:
+                best_score = score
+                best_index = i
+
+        # 所有候选视为同一簇（label=0），选中的是代表，其余为 aux samples
+        n = len(candidates)
+        cluster_labels = [0] * n
+        auxiliary_indices = [i for i in range(n) if i != best_index]
+
+        for i, node in enumerate(candidates):
+            node.selected_for_execution = i == best_index
+            node.selected_for_aux_loss = i != best_index
+
+        return SelectionResult(
+            selected_index=best_index,
+            representative_indices=[best_index],
+            cluster_labels=cluster_labels,
+            auxiliary_indices=auxiliary_indices,
+            cluster_weights={0: 1.0 / max(len(auxiliary_indices), 1)},
+            metadata={
+                "selected_cluster_id": 0,
+                "selected_score": best_score,
+                "n_auxiliary": len(auxiliary_indices),
+                "greedy": True,
+            },
         )
 
     def _execute_selection(self, branch: BranchRuntime, selected_node: TreeNode) -> None:
