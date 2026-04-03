@@ -288,7 +288,9 @@ class VerlActorBackend:
                         // int(actor_config.ppo_micro_batch_size_per_gpu),
                         1,
                     )
-                    micro_batches = mini_batch.split(int(actor_config.ppo_micro_batch_size_per_gpu))
+                    _micro_bs = int(actor_config.ppo_micro_batch_size_per_gpu)
+                    _n_micro = max(1, len(mini_batch) // _micro_bs)
+                    micro_batches = mini_batch.chunk(_n_micro)
 
                 actor_optimizer.zero_grad()
 
