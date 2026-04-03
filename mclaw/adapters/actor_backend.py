@@ -687,10 +687,43 @@ def _resolve_module_device(module: Any) -> Any | None:
 
 
 def _import_verl_policy_update_helpers() -> tuple[Any, Any, Any, Any, Any, Any]:
-    from verl.trainer.ppo.core_algos import agg_loss, get_policy_loss_fn, kl_penalty
+    from verl.agent_trainer.ppo.core_algos import kl_penalty, compute_policy_loss
     from verl.utils.device import get_device_id
     from verl.utils.py_functional import append_to_dict
     from verl.utils.seqlen_balancing import prepare_dynamic_batch
+    import verl.utils.torch_functional as verl_F
+
+    def agg_loss(loss_mat: Any, loss_mask: Any, loss_agg_mode: str = "mean") -> Any:
+        """Aggregate a per-token loss matrix using a mask."""
+        if loss_agg_mode == "sum":
+            return (loss_mat * loss_mask).sum()
+        return verl_F.masked_mean(loss_mat, loss_mask)
+
+    def get_policy_loss_fn(loss_mode: str = "vanilla") -> Any:
+        """Return a policy loss callable compatible with MClaw's actor backend."""
+        def _policy_loss_fn(
+            old_log_prob: Any,
+            log_prob: Any,
+            advantages: Any,
+            response_mask: Any,
+            loss_agg_mode: str = "mean",
+            config: Any = None,
+            rollout_is_weights: Any = None,
+        ) -> tuple[Any, dict[str, float]]:
+            cliprange = float(getattr(config, "cliprange", 0.2)) if config else 0.2
+            pg_loss, pg_clipfrac, ppo_kl = compute_policy_loss(
+                old_log_prob=old_log_prob,
+                log_prob=log_prob,
+                advantages=advantages,
+                eos_mask=response_mask,
+                cliprange=cliprange,
+            )
+            metrics = {
+                "actor/pg_clipfrac": pg_clipfrac.detach().item(),
+                "actor/ppo_kl": ppo_kl.detach().item(),
+            }
+            return pg_loss, metrics
+        return _policy_loss_fn
 
     return agg_loss, append_to_dict, get_device_id, get_policy_loss_fn, kl_penalty, prepare_dynamic_batch
 
