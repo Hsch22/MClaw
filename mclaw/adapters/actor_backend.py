@@ -261,7 +261,9 @@ class VerlActorBackend:
             non_tensor_select_keys.append("uid")
 
         data = data.select(batch_keys=select_keys, non_tensor_batch_keys=non_tensor_select_keys)
-        mini_batches = data.split(int(actor_config.ppo_mini_batch_size))
+        _mini_batch_size = int(actor_config.ppo_mini_batch_size)
+        _n_chunks = max(1, len(data) // _mini_batch_size)
+        mini_batches = data.chunk(_n_chunks)
         on_policy = len(mini_batches) == 1 and int(getattr(actor_config, "ppo_epochs", 1)) == 1
         n_mini_batches = max(len(mini_batches), 1)
 
