@@ -225,14 +225,14 @@ class VerlRolloutHandler:
                 + [suffix_loss_mask_value] * len(suffix_ids)
             )
         else:
-            max_len = max(len(prefix_ids), len(suffix_ids))
-            decoded_suffix = self.tokenizer.decode(
-                self.input_ids[-max_len:],
-                skip_special_tokens=False,
-            )
-            raise ValueError(
-                "Unsupported end of message format while appending chat message: "
-                f"{decoded_suffix!r}"
+            # Fallback: 当前 input_ids 末尾既不是 prefix 也不是 suffix，
+            # 说明处于非标准状态（例如 tree rollout 分支恢复）。
+            # 安全地追加完整的 prefix + content + suffix。
+            append_token_ids = list(prefix_ids) + list(content_token_ids) + list(suffix_ids)
+            append_loss_mask = (
+                [prefix_loss_mask_value] * len(prefix_ids)
+                + [content_loss_mask_value] * len(content_token_ids)
+                + [suffix_loss_mask_value] * len(suffix_ids)
             )
         return append_token_ids, append_loss_mask
 
