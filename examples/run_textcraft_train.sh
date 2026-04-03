@@ -38,7 +38,9 @@ DATA_FILE="${DATA_FILE:-${HOME}/husicheng/AgentGym-RL-Data-ID/train/textcraft_tr
 CONFIG_PATH="${CONFIG_PATH:-${PROJECT_ROOT}/mclaw/config/mclaw_trainer.yaml}"
 
 # ── GPU ───────────────────────────────────────────────────────────────────────
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4,5}"
+# 单卡训练：Qwen3-4B 在单张 A100-80GB 上完全够用（模型~7.5GB + vLLM KV cache）
+# 多卡 FSDP 需要 MClaw 支持 local_rank device pinning，当前未完全实现
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-6}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 
 # ── 环境服务器 ─────────────────────────────────────────────────────────────────
