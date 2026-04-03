@@ -155,41 +155,58 @@ class QCritic:
             sequences.append(merged)
             action_last_token_indices.append(len(merged) - 1)
 
-        input_ids, attention_mask = _pad_sequences(
-            sequences=sequences,
-            pad_token_id=_resolve_pad_token_id(self.tokenizer),
-            device=self._resolve_device(),
-        )
+        # Micro-batch forward pass to avoid OOM on large candidate sets (e.g., root_budget=256).
+        # 每批处理 micro_batch_size 个候选，仅提取 last hidden state 后立即释放中间张量。
+        micro_batch_size = getattr(self.config, "micro_batch_size", 32)
+        device = self._resolve_device()
+        pad_token_id = _resolve_pad_token_id(self.tokenizer)
 
         backbone_was_training = None
         if hasattr(self.actor_module_fsdp, "training"):
             backbone_was_training = bool(self.actor_module_fsdp.training)
             self.actor_module_fsdp.eval()
 
+        all_hidden_chunks: list[torch.Tensor] = []
+        all_sequence_lengths: list[int] = [len(seq) for seq in sequences]
+
         try:
-            with torch.no_grad():
-                model_outputs = self.actor_module_fsdp(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    output_hidden_states=True,
-                    return_dict=True,
+            total = len(sequences)
+            for start in range(0, total, micro_batch_size):
+                end = min(start + micro_batch_size, total)
+                chunk_sequences = sequences[start:end]
+                chunk_indices = action_last_token_indices[start:end]
+
+                chunk_input_ids, chunk_attention_mask = _pad_sequences(
+                    sequences=chunk_sequences,
+                    pad_token_id=pad_token_id,
+                    device=device,
                 )
-                last_hidden_state = _resolve_last_hidden_state(model_outputs)
-                hidden_states = last_hidden_state[
-                    torch.arange(last_hidden_state.size(0), device=last_hidden_state.device),
-                    torch.tensor(action_last_token_indices, device=last_hidden_state.device),
-                ]
+
+                with torch.no_grad():
+                    model_outputs = self.actor_module_fsdp(
+                        input_ids=chunk_input_ids,
+                        attention_mask=chunk_attention_mask,
+                        output_hidden_states=True,
+                        return_dict=True,
+                    )
+                    last_hidden_state = _resolve_last_hidden_state(model_outputs)
+                    # 仅提取 action 最后一个 token 的 hidden state，立即释放其余张量
+                    chunk_hidden = last_hidden_state[
+                        torch.arange(last_hidden_state.size(0), device=device),
+                        torch.tensor(chunk_indices, device=device),
+                    ].clone()
+                    all_hidden_chunks.append(chunk_hidden)
+                    # 显式释放大张量
+                    del model_outputs, last_hidden_state, chunk_input_ids, chunk_attention_mask
         finally:
             if backbone_was_training:
                 self.actor_module_fsdp.train()
 
+        hidden_states = torch.cat(all_hidden_chunks, dim=0)
+
         metadata: dict[str, Any] = {
-            "attention_mask": attention_mask.detach(),
-            "sequence_lengths": [len(sequence) for sequence in sequences],
+            "sequence_lengths": all_sequence_lengths,
         }
-        logits = getattr(model_outputs, "logits", None)
-        if logits is not None:
-            metadata["logits"] = logits.detach()
 
         return hidden_states, action_last_token_indices, metadata
 

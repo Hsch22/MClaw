@@ -28,6 +28,7 @@ mclaw:
     gamma: 0.99
     update_freq: 1
     grad_clip_norm: 1.0
+    micro_batch_size: 32
 
   aux_loss:
     coef: 0.2

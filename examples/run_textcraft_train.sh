@@ -198,7 +198,7 @@ run_train() {
         mclaw.aux_loss.coef=0.2 \
         \
         actor_rollout_ref.rollout.max_tokens=128 \
-        actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+        actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
         actor_rollout_ref.rollout.max_model_len=4096 \
         actor_rollout_ref.rollout.temperature=1.0 \
         actor_rollout_ref.rollout.n=1 \

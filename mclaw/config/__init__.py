@@ -64,6 +64,7 @@ class QCriticConfig:
     gamma: float = 0.99
     update_freq: int = 1
     grad_clip_norm: float | None = 1.0
+    micro_batch_size: int = 32
 
 
 @dataclass(slots=True)
