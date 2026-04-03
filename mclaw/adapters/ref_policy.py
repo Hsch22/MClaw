@@ -36,6 +36,7 @@ class VerlReferencePolicy:
             source_batch,
             field_name="ref_log_probs",
             payload=payload,
+            alignment="continuation",
         )
         return {"ref_log_probs": full_sequence_values}
 

@@ -47,6 +47,7 @@ class VerlActorBackend:
             source_batch,
             field_name="old_log_probs",
             payload=payload,
+            alignment="continuation",
         )
         return {"old_log_probs": full_sequence_values}
 

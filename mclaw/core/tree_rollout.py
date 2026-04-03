@@ -3,6 +3,7 @@ from __future__ import annotations
 """树状 rollout 引擎接口。"""
 
 from collections.abc import Mapping, Sequence as SequenceABC
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
@@ -132,8 +133,15 @@ class TreeRollout:
                 if env_pool and branch_slot < len(env_pool):
                     branch.metadata["env_client"] = env_pool[branch_slot]
                 branch.current_node.branch_id = branch_slot
-                self._execute_selection(branch, branch.current_node)
                 active_branches.append(branch)
+
+            # Parallel initial env execution for all root branches
+            if active_branches:
+                with ThreadPoolExecutor(max_workers=len(active_branches)) as executor:
+                    list(executor.map(
+                        lambda b: self._execute_selection(b, b.current_node),
+                        active_branches,
+                    ))
 
             for _ in range(1, self.config.max_rounds):
                 live_branches = [branch for branch in active_branches if not branch.done]
@@ -141,6 +149,7 @@ class TreeRollout:
                     break
 
                 candidates_by_branch = self._expand_branch_candidates(live_branches)
+                branches_to_execute: list[tuple[BranchRuntime, TreeNode]] = []
                 for branch in live_branches:
                     candidates = list(candidates_by_branch.get(branch.env_index, ()))
                     if not candidates:
@@ -161,7 +170,15 @@ class TreeRollout:
 
                     selected_node = candidates[selection.selected_index]
                     selected_node.branch_id = branch.env_index
-                    self._execute_selection(branch, selected_node)
+                    branches_to_execute.append((branch, selected_node))
+
+                # Parallel env execution for all branches in this round
+                if branches_to_execute:
+                    with ThreadPoolExecutor(max_workers=len(branches_to_execute)) as executor:
+                        list(executor.map(
+                            lambda args: self._execute_selection(args[0], args[1]),
+                            branches_to_execute,
+                        ))
 
         gamma = float(getattr(self.q_critic.config, "gamma", 0.99))
         for root in roots:
@@ -193,9 +210,15 @@ class TreeRollout:
         env_pool = [self.env_client_factory() for _ in range(self.config.n_envs)]
         item_id = _resolve_field(prompt_batch, "item_id")
         reset_kwargs = _resolve_mapping(prompt_batch, "env_reset_kwargs") or {}
-        for env_client in env_pool:
+
+        def _reset_env(env_client: EnvironmentClientProtocol) -> None:
             if hasattr(env_client, "reset") and item_id is not None:
                 env_client.reset(item_id, **reset_kwargs)
+
+        # Parallel env resets
+        if env_pool:
+            with ThreadPoolExecutor(max_workers=len(env_pool)) as executor:
+                list(executor.map(_reset_env, env_pool))
         return env_pool
 
     def _build_root_node(self, prompt_item: Any) -> TreeNode:

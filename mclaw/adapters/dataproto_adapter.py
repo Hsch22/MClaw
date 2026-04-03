@@ -67,21 +67,76 @@ class DataProtoAdapter:
             for trajectory in batch.trajectories
         ]
 
+        # ── verl convention: prompt is LEFT-padded, response is RIGHT-padded ──
+        # This ensures that verl's `[:, -response_length-1:-1]` correctly
+        # selects the response region from the end of each sequence.
+        max_prompt_len = max(view.prompt_length for view in views)
+        max_continuation_len = max(len(view.responses) for view in views)
+
+        def _left_right_pad_int(
+            views_data: list[_TrajectoryTensorView],
+            prompt_getter,
+            continuation_getter,
+            prompt_pad: int,
+            continuation_pad: int,
+        ) -> Any:
+            rows = []
+            for view in views_data:
+                prompt_part = prompt_getter(view)
+                cont_part = continuation_getter(view)
+                left_pad_count = max_prompt_len - len(prompt_part)
+                right_pad_count = max_continuation_len - len(cont_part)
+                row = (
+                    [prompt_pad] * left_pad_count
+                    + [int(v) for v in prompt_part]
+                    + [int(v) for v in cont_part]
+                    + [continuation_pad] * right_pad_count
+                )
+                rows.append(row)
+            return torch.tensor(rows, dtype=torch.long)
+
+        def _left_right_pad_float(
+            views_data: list[_TrajectoryTensorView],
+            prompt_getter,
+            continuation_getter,
+            pad_value: float = 0.0,
+        ) -> Any:
+            rows = []
+            for view in views_data:
+                prompt_part = prompt_getter(view)
+                cont_part = continuation_getter(view)
+                left_pad_count = max_prompt_len - len(prompt_part)
+                right_pad_count = max_continuation_len - len(cont_part)
+                row = (
+                    [pad_value] * left_pad_count
+                    + [float(v) for v in prompt_part]
+                    + [float(v) for v in cont_part]
+                    + [pad_value] * right_pad_count
+                )
+                rows.append(row)
+            return torch.tensor(rows, dtype=torch.float32)
+
         tensors: dict[str, Any] = {
-            "input_ids": self._pad_int_sequences(
-                [view.input_ids for view in views],
-                pad_value=self.pad_token_id,
-                torch_module=torch,
+            "input_ids": _left_right_pad_int(
+                views,
+                lambda v: v.input_ids[: v.prompt_length],
+                lambda v: v.input_ids[v.prompt_length :],
+                self.pad_token_id,
+                self.pad_token_id,
             ),
-            "attention_mask": self._pad_int_sequences(
-                [view.attention_mask for view in views],
-                pad_value=0,
-                torch_module=torch,
+            "attention_mask": _left_right_pad_int(
+                views,
+                lambda v: v.attention_mask[: v.prompt_length],
+                lambda v: v.attention_mask[v.prompt_length :],
+                0,
+                0,
             ),
-            "position_ids": self._pad_int_sequences(
-                [view.position_ids for view in views],
-                pad_value=0,
-                torch_module=torch,
+            "position_ids": _left_right_pad_int(
+                views,
+                lambda v: v.position_ids[: v.prompt_length],
+                lambda v: v.position_ids[v.prompt_length :],
+                0,
+                0,
             ),
             "responses": self._pad_int_sequences(
                 [view.responses for view in views],
@@ -179,8 +234,20 @@ class DataProtoAdapter:
         self,
         batch: ActorBatch,
         payload: Any,
+        alignment: str = "auto",
     ) -> list[list[float]]:
-        """把 response-only / continuation-only 信号扩展回 full sequence。"""
+        """把信号扩展回 full sequence 形状。
+
+        Args:
+            alignment: 信号的对齐语义。
+                - ``"continuation"``: 行长度 = max_continuation_length（verl
+                  的 compute_log_prob / compute_ref_log_prob 返回此格式）。
+                  每行截取到轨迹实际 continuation_length，前补 prompt zeros。
+                - ``"full"``: 行长度 = full_length，直接使用。
+                - ``"response"``: 行长度 = response_token_count（仅 action
+                  token），按 response_mask 散布到 full sequence。
+                - ``"auto"``: 按长度匹配猜测（向后兼容，不推荐）。
+        """
         rows = self._coerce_rows(payload)
         if len(rows) != len(batch.trajectories):
             raise ValueError(
@@ -193,17 +260,19 @@ class DataProtoAdapter:
             full_length = len(record.input_ids)
             prompt_length = self.infer_prompt_length(record)
             continuation_length = full_length - prompt_length
-            response_token_count = sum(int(flag) for flag in record.response_mask)
 
-            if len(row) == full_length:
-                expanded.append(list(row))
-                continue
-
-            if len(row) == continuation_length:
-                expanded.append(([0.0] * prompt_length) + list(row))
-                continue
-
-            if len(row) == response_token_count:
+            if alignment == "continuation":
+                truncated = row[:continuation_length]
+                expanded.append(([0.0] * prompt_length) + list(truncated))
+            elif alignment == "full":
+                expanded.append(list(row[:full_length]))
+            elif alignment == "response":
+                response_token_count = sum(int(flag) for flag in record.response_mask)
+                if len(row) < response_token_count:
+                    raise ValueError(
+                        f"response-aligned signal too short: "
+                        f"got {len(row)}, need {response_token_count}"
+                    )
                 values = [0.0] * full_length
                 response_index = 0
                 for token_index, is_response in enumerate(record.response_mask):
@@ -212,15 +281,51 @@ class DataProtoAdapter:
                     values[token_index] = row[response_index]
                     response_index += 1
                 expanded.append(values)
-                continue
-
-            raise ValueError(
-                "Signal row length does not match trajectory layout: "
-                f"full={full_length}, continuation={continuation_length}, "
-                f"response={response_token_count}, got={len(row)}"
-            )
+            elif alignment == "auto":
+                expanded.append(
+                    self._expand_signal_row_auto(record, row)
+                )
+            else:
+                raise ValueError(f"unsupported alignment: {alignment!r}")
 
         return expanded
+
+    def _expand_signal_row_auto(
+        self,
+        record: TrajectoryRecord,
+        row: list[float],
+    ) -> list[float]:
+        """Fallback: 按长度匹配猜测语义（向后兼容）。"""
+        full_length = len(record.input_ids)
+        prompt_length = self.infer_prompt_length(record)
+        continuation_length = full_length - prompt_length
+        response_token_count = sum(int(flag) for flag in record.response_mask)
+
+        if len(row) == full_length:
+            return list(row)
+
+        if len(row) == continuation_length:
+            return ([0.0] * prompt_length) + list(row)
+
+        if len(row) == response_token_count:
+            values = [0.0] * full_length
+            response_index = 0
+            for token_index, is_response in enumerate(record.response_mask):
+                if not is_response:
+                    continue
+                values[token_index] = row[response_index]
+                response_index += 1
+            return values
+
+        # padded continuation — truncate right-pad garbage
+        if len(row) > continuation_length:
+            return ([0.0] * prompt_length) + list(row[:continuation_length])
+
+        raise ValueError(
+            "Signal row length does not match trajectory layout: "
+            f"full={full_length}, continuation={continuation_length}, "
+            f"response={response_token_count}, got={len(row)}"
+        )
 
     def apply_signal_to_batch(
         self,
@@ -228,9 +333,12 @@ class DataProtoAdapter:
         *,
         field_name: str,
         payload: Any,
+        alignment: str = "auto",
     ) -> list[list[float]]:
         """把后端输出写回每条 TrajectoryRecord。"""
-        expanded = self.expand_signal_to_full_sequences(batch, payload)
+        expanded = self.expand_signal_to_full_sequences(
+            batch, payload, alignment=alignment,
+        )
         for record, values in zip(batch.trajectories, expanded):
             setattr(record, field_name, list(values))
         batch.metadata[field_name] = expanded
