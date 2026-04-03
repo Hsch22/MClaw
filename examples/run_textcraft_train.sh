@@ -43,6 +43,19 @@ CONFIG_PATH="${CONFIG_PATH:-${PROJECT_ROOT}/mclaw/config/mclaw_trainer.yaml}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-5,6}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 
+# 根据可见 GPU 数量动态计算 vLLM 参数
+IFS=',' read -ra _GPU_LIST <<< "${CUDA_VISIBLE_DEVICES}"
+NUM_GPUS="${#_GPU_LIST[@]}"
+
+if [ "${NUM_GPUS}" -ge 2 ]; then
+    # 双卡+: vLLM 独占 GPU，可以给更多显存
+    ROLLOUT_GPU_MEM="${ROLLOUT_GPU_MEM:-0.7}"
+else
+    # 单卡: vLLM 与训练共享，保守分配
+    ROLLOUT_GPU_MEM="${ROLLOUT_GPU_MEM:-0.4}"
+fi
+echo "[train] Detected ${NUM_GPUS} GPU(s), vLLM gpu_memory_utilization=${ROLLOUT_GPU_MEM}"
+
 # ── 环境服务器 ─────────────────────────────────────────────────────────────────
 ENV_PORT="${ENV_PORT:-36006}"
 ENV_ADDR="http://127.0.0.1:${ENV_PORT}"
@@ -198,7 +211,7 @@ run_train() {
         mclaw.aux_loss.coef=0.2 \
         \
         actor_rollout_ref.rollout.max_tokens=512 \
-        actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+        actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEM} \
         actor_rollout_ref.rollout.max_model_len=32768 \
         actor_rollout_ref.rollout.temperature=1.0 \
         actor_rollout_ref.rollout.n=8 \
