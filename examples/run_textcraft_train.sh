@@ -214,7 +214,7 @@ run_train() {
         actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEM} \
         actor_rollout_ref.rollout.max_model_len=32768 \
         actor_rollout_ref.rollout.temperature=1.0 \
-        actor_rollout_ref.rollout.n=8 \
+        actor_rollout_ref.rollout.n=1 \
         actor_rollout_ref.rollout.logprobs=1 \
         \
         actor_rollout_ref.actor.ppo_epochs=1 \
