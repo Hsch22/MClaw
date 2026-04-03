@@ -316,13 +316,18 @@ class VerlActorBackend:
                     else:
                         loss_scale_factor = 1.0 / float(gradient_accumulation)
 
-                    outputs = self.actor._forward_micro_batch(
+                    _fmb_result = self.actor._forward_micro_batch(
                         model_inputs,
                         temperature=temperature,
-                        calculate_entropy=calculate_entropy,
                     )
-                    log_prob = outputs["log_probs"]
-                    entropy = outputs["entropys"] if calculate_entropy else None
+                    # verl returns (entropy, log_probs) tuple or dict
+                    if isinstance(_fmb_result, dict):
+                        log_prob = _fmb_result["log_probs"]
+                        entropy = _fmb_result.get("entropys") if calculate_entropy else None
+                    else:
+                        entropy, log_prob = _fmb_result
+                        if not calculate_entropy:
+                            entropy = None
 
                     if getattr(actor_config, "use_rollout_log_probs", False):
                         old_log_prob = model_inputs["old_log_probs"]
