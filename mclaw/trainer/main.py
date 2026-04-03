@@ -87,6 +87,12 @@ def build_trainer(config: MClawTrainerConfig) -> MClawTrainer:
         if torch.distributed.is_available() and not torch.distributed.is_initialized():
             torch.distributed.init_process_group(backend="nccl")
 
+    import logging as _logging
+    _build_log = _logging.getLogger("mclaw.trainer.main")
+    torch = _import_torch()
+    train_dev = _resolve_train_device(config, torch_module=torch)
+    _build_log.info("Device placement: vLLM → cuda:0, training → %s", train_dev)
+
     tokenizer = _build_tokenizer(config)
     actor_module = _build_actor_module(config)
     actor_module_fsdp = _wrap_model_with_fsdp_if_enabled(actor_module, config)
@@ -215,7 +221,7 @@ def _build_actor_module(config: MClawTrainerConfig) -> Any:
         torch_dtype=torch_dtype,
     )
 
-    device = _resolve_device(config, torch_module=torch)
+    device = _resolve_train_device(config, torch_module=torch)
     if device is not None:
         model = model.to(device)
     return model
@@ -655,6 +661,34 @@ def _resolve_device(config: MClawTrainerConfig, *, torch_module: Any) -> Any | N
     if torch_module.cuda.is_available():
         return torch_module.device("cuda")
     return torch_module.device("cpu")
+
+
+def _resolve_train_device(config: MClawTrainerConfig, *, torch_module: Any) -> Any:
+    """解析训练设备（actor/Q-critic/ref model）。
+
+    ``train_device`` 语义:
+    - ``"auto"``: 若有 ≥2 张 GPU 且 vLLM 占 cuda:0，则训练放 cuda:1；否则同 device。
+    - ``"same"``: 强制与 device 一致（即使有多卡也只用一张）。
+    - ``"cuda:N"``: 显式指定。
+    """
+    train_device = str(getattr(config.distributed, "train_device", "auto")).strip().lower()
+
+    if train_device == "same":
+        return _resolve_device(config, torch_module=torch_module)
+
+    if train_device == "auto":
+        if torch_module.cuda.is_available():
+            n_gpus = torch_module.cuda.device_count()
+            tp = max(int(config.distributed.tensor_parallel_size), 1)
+            if n_gpus >= tp + 1:
+                # vLLM 占 cuda:0..cuda:{tp-1}，训练放 cuda:{tp}
+                return torch_module.device(f"cuda:{tp}")
+        return _resolve_device(config, torch_module=torch_module)
+
+    if train_device.startswith("cuda"):
+        return torch_module.device(train_device)
+
+    return _resolve_device(config, torch_module=torch_module)
 
 
 def _resolve_module_device(module: Any, *, torch_module: Any) -> Any:

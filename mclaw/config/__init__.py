@@ -113,6 +113,7 @@ class DistributedConfig:
     tensor_parallel_size: int = 1
     full_params: bool = False
     device: str = "cuda"
+    train_device: str = "auto"
     fsdp_config: dict[str, Any] = field(default_factory=dict)
     use_rollout_sharding_manager: bool = True
     use_training_sharding_manager: bool = False

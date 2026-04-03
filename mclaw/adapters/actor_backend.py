@@ -294,8 +294,9 @@ class VerlActorBackend:
 
                 actor_optimizer.zero_grad()
 
+                _actor_device = _resolve_module_device(actor_module) or get_device_id()
                 for micro_batch in micro_batches:
-                    micro_batch = micro_batch.to(get_device_id())
+                    micro_batch = micro_batch.to(_actor_device)
                     micro_batch_metrics: dict[str, Any] = {}
                     model_inputs = {
                         **micro_batch.batch,

@@ -120,6 +120,7 @@ distributed:
   tensor_parallel_size: 1
   full_params: false
   device: cuda
+  train_device: auto    # auto: 多卡时 vLLM 占 cuda:0, 训练放 cuda:1; 单卡全部在 cuda:0
   fsdp_config: {}
   use_rollout_sharding_manager: true
   use_training_sharding_manager: false

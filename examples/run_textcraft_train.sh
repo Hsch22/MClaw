@@ -38,9 +38,9 @@ DATA_FILE="${DATA_FILE:-${HOME}/husicheng/AgentGym-RL-Data-ID/train/textcraft_tr
 CONFIG_PATH="${CONFIG_PATH:-${PROJECT_ROOT}/mclaw/config/mclaw_trainer.yaml}"
 
 # ── GPU ───────────────────────────────────────────────────────────────────────
-# 单卡训练：Qwen3-4B 在单张 A100-80GB 上完全够用（模型~7.5GB + vLLM KV cache）
-# 多卡 FSDP 需要 MClaw 支持 local_rank device pinning，当前未完全实现
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-6}"
+# 双卡模式（推荐）：vLLM 推理占 cuda:0, 训练占 cuda:1（由 train_device=auto 自动分配）
+# 单卡模式：只设一张 GPU，训练和推理共享显存
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-5,6}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 
 # ── 环境服务器 ─────────────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ run_train() {
         mclaw.aux_loss.coef=0.2 \
         \
         actor_rollout_ref.rollout.max_tokens=128 \
-        actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+        actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
         actor_rollout_ref.rollout.max_model_len=4096 \
         actor_rollout_ref.rollout.temperature=1.0 \
         actor_rollout_ref.rollout.n=1 \
