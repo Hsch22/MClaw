@@ -1,0 +1,6 @@
+# Python 3.8.13
+# Minimal runtime dependencies for MClaw Tool Weather envserver.
+fastapi==0.103.2
+uvicorn==0.23.2
+requests==2.27.1
+geopy==2.4.1

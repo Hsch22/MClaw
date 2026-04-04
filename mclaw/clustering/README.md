@@ -17,6 +17,12 @@
 
 ## 各聚类器
 
+- `action.py`
+  - 直接按完整 `action token` 序列做精确分组，不依赖额外 `model_outputs`。
+  - 不走 PCA / K-Means；`root_clusters` / `intra_branch_clusters` 对这个方法只作为请求值记录，不决定最终分组数。
+  - 内部仍会生成一个补零后的 token feature 供调试和 `cluster_feature` 回写使用，但分组逻辑完全基于 token 序列精确匹配。
+  - 适合 action 空间简单、希望验证“同动作严格视为同簇”时使用。
+
 - `hidden_state.py`
   - 从上游 `model_outputs` 读取 hidden states，不自行触发 forward。
   - 支持 `config.hidden_state.layer` 选择目标层。
@@ -39,5 +45,6 @@
 
 ## 当前状态
 
-- 主流程已经可以用 `hidden_state` / `output_grad` / `logprob` / `logit_distribution` 做特征提取和聚类。
+- 主流程已经可以用 `action` / `hidden_state` / `output_grad` / `logprob` / `logit_distribution` 做特征提取和聚类。
+- 其中 `action` 是精确离散分组；其余向量类方法仍共用 `BaseClusterer` 的 PCA + deterministic torch K-Means。
 - 仍未实现自定义距离度量、分层粗筛、或更高性能的大规模聚类后端。

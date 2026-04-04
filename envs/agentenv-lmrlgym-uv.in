@@ -1,0 +1,9 @@
+# Python 3.9.12
+# Minimal runtime dependencies for MClaw LMRL-Gym Maze/Wordle envserver.
+fastapi==0.103.2
+uvicorn==0.23.2
+numpy==1.26.4
+tqdm==4.64.0
+transformers==4.26.1
+termcolor==1.1.0
+ipython==8.18.1

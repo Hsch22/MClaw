@@ -21,6 +21,7 @@ from mclaw.adapters import (
     build_tracker,
 )
 from mclaw.clustering import (
+    ActionClusterer,
     HiddenStateClusterer,
     LogProbClusterer,
     LogitDistributionClusterer,
@@ -262,6 +263,8 @@ def _build_q_head(config: MClawTrainerConfig, actor_module: Any) -> QHead:
 
 def _build_clusterer(config: MClawTrainerConfig) -> Any:
     method = str(config.clustering.method).strip().lower()
+    if method == "action":
+        return ActionClusterer(config.clustering)
     if method == "hidden_state":
         return HiddenStateClusterer(config.clustering)
     if method == "output_grad":

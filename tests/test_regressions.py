@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from mclaw.adapters import DataProtoAdapter, StandardLogger, VerlActorBackend, build_tracker
+from mclaw.clustering import ActionClusterer
 from mclaw.clustering.base import BaseClusterer, ClusterResult
 from mclaw.config import ClusteringConfig, MClawTrainerConfig, TreeRolloutConfig
 from mclaw.core.contracts import ActorBatch, AuxiliaryBatch, AuxiliarySample, EnvironmentStep, TrajectoryRecord
@@ -16,6 +17,7 @@ from mclaw.core.tree_node import TreeNode
 from mclaw.core.tree_rollout import TreeRollout
 from mclaw.critic import compute_tree_advantage
 from mclaw.critic.q_critic import QCriticOutput
+from mclaw.trainer.main import _build_clusterer
 from mclaw.trainer.mclaw_trainer import MClawTrainer, _validate_load_state_result
 
 
@@ -275,6 +277,50 @@ class RegressionTests(unittest.TestCase):
 
         counts = torch.bincount(adjusted, minlength=4)
         self.assertTrue(torch.all(counts > 0).item())
+
+    def test_action_clusterer_uses_raw_action_tokens_without_model_outputs(self) -> None:
+        clusterer = ActionClusterer(ClusteringConfig(pca_dim=0))
+
+        features = clusterer.extract_features(
+            action_token_ids=[[3, 0], [3], [8, 9]],
+            state_token_ids=[[1], [1], [1]],
+            model_outputs={},
+        )
+
+        expected = torch.tensor(
+            [
+                [4.0, 1.0],
+                [4.0, 0.0],
+                [9.0, 10.0],
+            ],
+            dtype=torch.float32,
+        )
+        self.assertTrue(torch.equal(features, expected))
+
+    def test_action_clusterer_groups_identical_token_sequences_exactly(self) -> None:
+        clusterer = ActionClusterer(ClusteringConfig(method="action", pca_dim=128))
+        nodes = [
+            TreeNode(state_tokens=[1], action_tokens=[7, 8]),
+            TreeNode(state_tokens=[1], action_tokens=[7, 8]),
+            TreeNode(state_tokens=[1], action_tokens=[9]),
+            TreeNode(state_tokens=[1], action_tokens=[7, 8]),
+            TreeNode(state_tokens=[1], action_tokens=[9]),
+        ]
+
+        result = clusterer.cluster_candidates(nodes, n_clusters=1, model_outputs={})
+
+        self.assertEqual(result.labels, [0, 0, 1, 0, 1])
+        self.assertEqual(result.representative_indices, [0, 2])
+        self.assertEqual(result.metadata["n_clusters"], 2)
+        self.assertTrue(result.metadata["requested_clusters_ignored"])
+        self.assertEqual(result.metadata["cluster_algorithm"], "exact_action_token_match")
+
+    def test_build_clusterer_supports_action_method(self) -> None:
+        clusterer = _build_clusterer(
+            MClawTrainerConfig(clustering=ClusteringConfig(method="action"))
+        )
+
+        self.assertIsInstance(clusterer, ActionClusterer)
 
     def test_auxiliary_loss_updates_actor_parameters(self) -> None:
         torch.manual_seed(0)

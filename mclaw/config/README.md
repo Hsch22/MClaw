@@ -10,6 +10,8 @@
   - 根节点/分支候选预算、聚类数、最大轮数
 - `ClusteringConfig`
   - 聚类方法、PCA 维度，以及 `hidden_state` / `output_grad` / `logit_distribution` 子配置
+  - 当前 `method` 可选 `action` / `hidden_state` / `output_grad` / `logprob` / `logit_distribution`
+  - 其中 `action` 为 exact-match 分组，不使用 `pca_dim`
 - `QCriticConfig`
   - Q-head hidden dim、MLP dim、学习率、`gamma`、更新频率、grad clip
 - `AuxLossConfig`

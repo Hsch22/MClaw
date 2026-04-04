@@ -22,7 +22,7 @@ Conda、`CUDA_HOME` / `nvcc`、flash-attn 与 vLLM 环境说明见上级目录 [
   - `ActorBatch <-> DataProto` 适配
   - actor / ref / env / vLLM / rollout handler / logger 包装
 - `clustering/`
-  - hidden-state / output-grad / logprob / logit-distribution 聚类器
+  - action / hidden-state / output-grad / logprob / logit-distribution 聚类器
 - `critic/`
   - `QHead`
   - `QCritic`
