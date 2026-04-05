@@ -14,6 +14,8 @@ class HiddenStateClusterConfig:
     """Hidden-state 聚类配置。"""
 
     layer: int = -1
+    token_pooling: str = "last"
+    last_k: int = 4
 
 
 @dataclass(slots=True)

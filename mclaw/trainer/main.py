@@ -181,6 +181,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         trainer.fit()
     finally:
+        inference_engine = getattr(trainer, "inference_engine", None)
+        shutdown = getattr(inference_engine, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception:
+                pass
         logger = getattr(trainer, "logger", None)
         close = getattr(logger, "close", None)
         if callable(close):

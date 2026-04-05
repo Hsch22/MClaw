@@ -29,12 +29,12 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
-AGENTGYM_RL_SRC="${AGENTGYM_RL_SRC:-${HOME}/husicheng/AgentGym-RL/AgentGym-RL}"
-AGENTGYM_DIR="${AGENTGYM_DIR:-${HOME}/husicheng/AgentGym-RL/AgentGym}"
-TRAIN_PYTHON="${TRAIN_PYTHON:-${HOME}/husicheng/MClaw/.venv/bin/python}"
-ENVSERVER_PYTHON="${ENVSERVER_PYTHON:-${HOME}/husicheng/MClaw/.venv/bin/python}"
-MODEL_PATH="${MODEL_PATH:-${HOME}/husicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507}"
-DATA_FILE="${DATA_FILE:-${HOME}/husicheng/AgentGym-RL-Data-ID/train/textcraft_train.json}"
+AGENTGYM_RL_SRC="${AGENTGYM_RL_SRC:-/mnt/kangshijia/husicheng/AgentGym-RL/AgentGym-RL}"
+AGENTGYM_DIR="${AGENTGYM_DIR:-/mnt/kangshijia/husicheng/AgentGym}"
+TRAIN_PYTHON="${TRAIN_PYTHON:-/mnt/kangshijia/wangbinyu/conda_envs/mclaw-train/bin/python}"
+ENVSERVER_PYTHON="${ENVSERVER_PYTHON:-/mnt/kangshijia/wangbinyu/conda_envs/mclaw-envserver/bin/python}"
+MODEL_PATH="${MODEL_PATH:-/mnt/kangshijia/husicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507}"
+DATA_FILE="${DATA_FILE:-/mnt/kangshijia/husicheng/AgentGym-RL-Data-ID/train/textcraft_train.json}"
 CONFIG_PATH="${CONFIG_PATH:-${PROJECT_ROOT}/mclaw/config/mclaw_trainer.yaml}"
 
 # ── GPU ───────────────────────────────────────────────────────────────────────
@@ -114,16 +114,10 @@ start_env_server() {
     fuser -k "${ENV_PORT}/tcp" 2>/dev/null || true
     sleep 1
     cd "${AGENTGYM_DIR}/agentenv-textcraft"
-    TEXTCRAFT_BIN="$(dirname "${ENVSERVER_PYTHON}")/textcraft"
-    if [ -x "${TEXTCRAFT_BIN}" ]; then
-        "${TEXTCRAFT_BIN}" --host 127.0.0.1 --port "${ENV_PORT}" \
-            > "${ENV_LOG}" 2>&1 &
-    else
-        "${ENVSERVER_PYTHON}" -c "
+    "${ENVSERVER_PYTHON}" -c "
 import uvicorn
 uvicorn.run('agentenv_textcraft:app', host='127.0.0.1', port=${ENV_PORT})
 " > "${ENV_LOG}" 2>&1 &
-    fi
     ENV_PID=$!
     echo "[train] Env server PID: ${ENV_PID}"
 }

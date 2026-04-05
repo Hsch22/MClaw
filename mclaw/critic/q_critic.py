@@ -22,6 +22,7 @@ class QCriticOutput:
     """Q-critic 前向输出。"""
 
     hidden_states: torch.Tensor | None = None
+    token_hidden_states: list[torch.Tensor] | None = None
     q_values: torch.Tensor | None = None
     action_last_token_indices: list[int] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -49,18 +50,29 @@ class QCritic:
         self,
         state_token_ids: Sequence[int] | Sequence[Sequence[int]],
         action_token_ids: Sequence[Sequence[int]],
+        cluster_hidden_state_layer: int = -1,
+        return_token_hidden_states: bool = False,
     ) -> QCriticOutput:
         """对一批 state-action 对做前向打分。"""
         if torch is None:
             raise ModuleNotFoundError("torch is required to score actions")
-        hidden_states, action_last_token_indices, metadata = self._encode_state_action_pairs(
+        (
+            q_hidden_states,
+            cluster_hidden_states,
+            token_hidden_states,
+            action_last_token_indices,
+            metadata,
+        ) = self._encode_state_action_pairs_for_scoring(
             state_token_ids=state_token_ids,
             action_token_ids=action_token_ids,
+            cluster_hidden_state_layer=cluster_hidden_state_layer,
+            return_token_hidden_states=return_token_hidden_states,
         )
         with torch.no_grad():
-            q_values = self.q_head(hidden_states)
+            q_values = self.q_head(q_hidden_states)
         return QCriticOutput(
-            hidden_states=hidden_states,
+            hidden_states=cluster_hidden_states,
+            token_hidden_states=token_hidden_states,
             q_values=q_values,
             action_last_token_indices=action_last_token_indices,
             metadata=metadata,
@@ -223,6 +235,120 @@ class QCritic:
 
         return hidden_states, action_last_token_indices, metadata
 
+    def _encode_state_action_pairs_for_scoring(
+        self,
+        *,
+        state_token_ids: Sequence[int] | Sequence[Sequence[int]],
+        action_token_ids: Sequence[Sequence[int]],
+        cluster_hidden_state_layer: int,
+        return_token_hidden_states: bool,
+    ) -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor] | None, list[int], dict[str, Any]]:
+        if torch is None:
+            raise ModuleNotFoundError("torch is required to run QCritic")
+        if self.actor_module_fsdp is None:
+            raise ValueError("actor_module_fsdp is required to run QCritic")
+
+        batch_state_token_ids = _normalize_state_token_ids(state_token_ids, len(action_token_ids))
+        if len(batch_state_token_ids) != len(action_token_ids):
+            raise ValueError("state_token_ids and action_token_ids must have the same batch size")
+
+        sequences: list[list[int]] = []
+        action_last_token_indices: list[int] = []
+        for state_ids, action_ids in zip(batch_state_token_ids, action_token_ids):
+            if not action_ids:
+                raise ValueError("action_token_ids must be non-empty")
+            merged = list(state_ids) + list(action_ids)
+            sequences.append(merged)
+            action_last_token_indices.append(len(merged) - 1)
+
+        max_micro_batch = getattr(self.config, "micro_batch_size", 32)
+        device = self._resolve_device()
+        pad_token_id = _resolve_pad_token_id(self.tokenizer)
+        need_hidden_sequences = bool(return_token_hidden_states) or int(cluster_hidden_state_layer) != -1
+
+        backbone_was_training = None
+        if hasattr(self.actor_module_fsdp, "training"):
+            backbone_was_training = bool(self.actor_module_fsdp.training)
+            self.actor_module_fsdp.eval()
+
+        all_q_hidden_chunks: list[torch.Tensor] = []
+        all_cluster_hidden_chunks: list[torch.Tensor] = []
+        all_token_hidden_states: list[torch.Tensor] | None = [] if return_token_hidden_states else None
+        all_sequence_lengths: list[int] = [len(seq) for seq in sequences]
+
+        try:
+            total = len(sequences)
+            backbone = getattr(self.actor_module_fsdp, "model", self.actor_module_fsdp)
+            start = 0
+            while start < total:
+                chunk_max_len = max(
+                    len(sequences[i]) for i in range(start, min(start + max_micro_batch, total))
+                )
+                if chunk_max_len <= 2048:
+                    micro_batch_size = max_micro_batch
+                else:
+                    micro_batch_size = max(1, int(max_micro_batch * 2048 / chunk_max_len))
+
+                end = min(start + micro_batch_size, total)
+                chunk_sequences = sequences[start:end]
+                chunk_indices = action_last_token_indices[start:end]
+                chunk_lengths = [len(sequence) for sequence in chunk_sequences]
+
+                chunk_input_ids, chunk_attention_mask = _pad_sequences(
+                    sequences=chunk_sequences,
+                    pad_token_id=pad_token_id,
+                    device=device,
+                )
+
+                with torch.no_grad():
+                    model_outputs = backbone(
+                        input_ids=chunk_input_ids,
+                        attention_mask=chunk_attention_mask,
+                        output_hidden_states=need_hidden_sequences,
+                        return_dict=True,
+                    )
+                    last_hidden_state = getattr(model_outputs, "last_hidden_state", None)
+                    if last_hidden_state is None:
+                        last_hidden_state = _resolve_last_hidden_state(model_outputs)
+
+                    batch_indices = torch.arange(last_hidden_state.size(0), device=device)
+                    token_indices = torch.tensor(chunk_indices, device=device)
+
+                    q_hidden = last_hidden_state[batch_indices, token_indices].clone()
+                    all_q_hidden_chunks.append(q_hidden)
+
+                    cluster_source = (
+                        _resolve_hidden_state_layer(model_outputs, int(cluster_hidden_state_layer))
+                        if need_hidden_sequences
+                        else last_hidden_state
+                    )
+                    cluster_hidden = cluster_source[batch_indices, token_indices].clone()
+                    all_cluster_hidden_chunks.append(cluster_hidden)
+
+                    if all_token_hidden_states is not None:
+                        for row_index, sequence_length in enumerate(chunk_lengths):
+                            all_token_hidden_states.append(
+                                cluster_source[row_index, :sequence_length].clone()
+                            )
+
+                    del model_outputs, last_hidden_state, cluster_source, chunk_input_ids, chunk_attention_mask
+                torch.cuda.empty_cache()
+                start = end
+        finally:
+            if backbone_was_training:
+                self.actor_module_fsdp.train()
+
+        metadata: dict[str, Any] = {
+            "sequence_lengths": all_sequence_lengths,
+        }
+        return (
+            torch.cat(all_q_hidden_chunks, dim=0),
+            torch.cat(all_cluster_hidden_chunks, dim=0),
+            all_token_hidden_states,
+            action_last_token_indices,
+            metadata,
+        )
+
     def _resolve_device(self) -> torch.device:
         if torch is None:
             raise ModuleNotFoundError("torch is required to resolve device")
@@ -305,6 +431,21 @@ def _resolve_last_hidden_state(model_outputs: Any) -> torch.Tensor:
     if last_hidden_state is None:
         raise AttributeError("model_outputs must expose hidden_states or last_hidden_state")
     return last_hidden_state
+
+
+def _resolve_hidden_state_layer(model_outputs: Any, layer_index: int) -> torch.Tensor:
+    hidden_states = getattr(model_outputs, "hidden_states", None)
+    if hidden_states is None:
+        if layer_index == -1:
+            return _resolve_last_hidden_state(model_outputs)
+        raise AttributeError("model_outputs.hidden_states is required for non-last hidden-state layers")
+    if isinstance(hidden_states, (list, tuple)):
+        if not hidden_states:
+            raise AttributeError("model_outputs.hidden_states is empty")
+        return hidden_states[layer_index]
+    if layer_index != -1:
+        raise AttributeError("single hidden_states tensor only supports layer_index=-1")
+    return hidden_states
 
 
 def _require_next_state_value(sample: CriticSample) -> float:

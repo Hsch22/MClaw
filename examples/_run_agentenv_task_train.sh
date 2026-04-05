@@ -178,8 +178,6 @@ check_env_runtime() {
 }
 
 start_env_server() {
-    local env_bin
-    env_bin="$(dirname "${ENVSERVER_PYTHON}")/${MCLAW_ENV_BIN_NAME}"
     echo "[train] Starting ${DISPLAY_NAME} env server on port ${ENV_PORT}..."
     echo "[train] Env server log: ${ENV_LOG}"
     fuser -k "${ENV_PORT}/tcp" 2>/dev/null || true
@@ -191,12 +189,7 @@ start_env_server() {
         if [ -n "${ENV_PROJECT_PATH}" ]; then
             export PROJECT_PATH="${ENV_PROJECT_PATH}"
         fi
-        if [ -x "${env_bin}" ]; then
-            # shellcheck disable=SC2086
-            exec "${env_bin}" --host 127.0.0.1 --port "${ENV_PORT}" ${MCLAW_ENV_LAUNCH_EXTRA_ARGS:-}
-        else
-            exec "${ENVSERVER_PYTHON}" -c "import uvicorn; uvicorn.run('${MCLAW_ENV_IMPORT_MODULE}:app', host='127.0.0.1', port=${ENV_PORT})"
-        fi
+        exec "${ENVSERVER_PYTHON}" -c "import uvicorn; uvicorn.run('${MCLAW_ENV_IMPORT_MODULE}:app', host='127.0.0.1', port=${ENV_PORT})"
     ) > "${ENV_LOG}" 2>&1 &
     ENV_PID=$!
     echo "[train] Env server PID: ${ENV_PID}"
@@ -331,6 +324,7 @@ echo "========================================"
 case "${1:-all}" in
     env|envserver|server)
         start_env_server
+        wait "${ENV_PID}"
         ;;
     train)
         shift

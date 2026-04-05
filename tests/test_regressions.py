@@ -9,9 +9,9 @@ import torch
 from torch import nn
 
 from mclaw.adapters import DataProtoAdapter, StandardLogger, VerlActorBackend, build_tracker
-from mclaw.clustering import ActionClusterer
+from mclaw.clustering import ActionClusterer, HiddenStateClusterer
 from mclaw.clustering.base import BaseClusterer, ClusterResult
-from mclaw.config import ClusteringConfig, MClawTrainerConfig, TreeRolloutConfig
+from mclaw.config import ClusteringConfig, HiddenStateClusterConfig, MClawTrainerConfig, TreeRolloutConfig
 from mclaw.core.contracts import ActorBatch, AuxiliaryBatch, AuxiliarySample, EnvironmentStep, TrajectoryRecord
 from mclaw.core.tree_node import TreeNode
 from mclaw.core.tree_rollout import TreeRollout
@@ -102,8 +102,14 @@ class _FakeQCritic:
     def __init__(self) -> None:
         self.config = SimpleNamespace(gamma=0.99)
 
-    def score_actions(self, state_token_ids, action_token_ids):  # type: ignore[override]
-        del state_token_ids
+    def score_actions(  # type: ignore[override]
+        self,
+        state_token_ids,
+        action_token_ids,
+        cluster_hidden_state_layer: int = -1,
+        return_token_hidden_states: bool = False,
+    ):
+        del state_token_ids, cluster_hidden_state_layer, return_token_hidden_states
         return QCriticOutput(q_values=torch.ones(len(action_token_ids), dtype=torch.float32))
 
 
@@ -321,6 +327,54 @@ class RegressionTests(unittest.TestCase):
         )
 
         self.assertIsInstance(clusterer, ActionClusterer)
+
+    def test_hidden_state_clusterer_supports_last_k_mean_pooling(self) -> None:
+        clusterer = HiddenStateClusterer(
+            ClusteringConfig(
+                method="hidden_state",
+                hidden_state=HiddenStateClusterConfig(
+                    layer=-1,
+                    token_pooling="last_k_mean",
+                    last_k=2,
+                ),
+            )
+        )
+
+        token_hidden_states = [
+            torch.tensor(
+                [
+                    [10.0, 10.0],
+                    [20.0, 20.0],
+                    [1.0, 0.0],
+                    [2.0, 0.0],
+                    [4.0, 0.0],
+                ],
+                dtype=torch.float32,
+            ),
+            torch.tensor(
+                [
+                    [30.0, 30.0],
+                    [0.0, 1.0],
+                    [0.0, 3.0],
+                ],
+                dtype=torch.float32,
+            ),
+        ]
+
+        features = clusterer.extract_features(
+            action_token_ids=[[11, 12, 13], [21, 22]],
+            state_token_ids=[[1, 2], [3]],
+            model_outputs={"token_hidden_states": token_hidden_states},
+        )
+
+        expected = torch.tensor(
+            [
+                [3.0, 0.0],
+                [0.0, 2.0],
+            ],
+            dtype=torch.float32,
+        )
+        self.assertTrue(torch.allclose(features, expected))
 
     def test_auxiliary_loss_updates_actor_parameters(self) -> None:
         torch.manual_seed(0)

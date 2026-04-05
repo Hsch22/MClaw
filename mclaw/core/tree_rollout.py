@@ -305,9 +305,20 @@ class TreeRollout:
         else:
             state_token_ids = [list(node.state_tokens) for node in candidates]
 
+        cluster_hidden_state_layer = -1
+        return_token_hidden_states = False
+        cluster_method = str(getattr(getattr(self.clusterer, "config", None), "method", ""))
+        if cluster_method == "hidden_state":
+            hidden_state_config = getattr(self.clusterer.config, "hidden_state", None)
+            cluster_hidden_state_layer = int(getattr(hidden_state_config, "layer", -1))
+            token_pooling = str(getattr(hidden_state_config, "token_pooling", "last")).strip().lower()
+            return_token_hidden_states = token_pooling != "last"
+
         return self.q_critic.score_actions(
             state_token_ids=state_token_ids,
             action_token_ids=[node.action_tokens for node in candidates],
+            cluster_hidden_state_layer=cluster_hidden_state_layer,
+            return_token_hidden_states=return_token_hidden_states,
         )
 
     def _score_candidate_groups(
@@ -799,6 +810,8 @@ def _qcritic_output_to_mapping(qcritic_output: QCriticOutput) -> dict[str, Any]:
     }
     if qcritic_output.hidden_states is not None:
         mapping["hidden_states"] = qcritic_output.hidden_states
+    if qcritic_output.token_hidden_states is not None:
+        mapping["token_hidden_states"] = qcritic_output.token_hidden_states
     if qcritic_output.q_values is not None:
         mapping["q_values"] = qcritic_output.q_values
     mapping.update(qcritic_output.metadata)
@@ -816,10 +829,17 @@ def _slice_qcritic_output(
         for key, value in qcritic_output.metadata.items()
     }
     hidden_states = _slice_candidate_aligned_value(qcritic_output.hidden_states, start=start, end=end, total=total)
+    token_hidden_states = _slice_candidate_aligned_value(
+        qcritic_output.token_hidden_states,
+        start=start,
+        end=end,
+        total=total,
+    )
     q_values = _slice_candidate_aligned_value(qcritic_output.q_values, start=start, end=end, total=total)
     action_last_token_indices = list(qcritic_output.action_last_token_indices[start:end])
     return QCriticOutput(
         hidden_states=hidden_states,
+        token_hidden_states=token_hidden_states,
         q_values=q_values,
         action_last_token_indices=action_last_token_indices,
         metadata=metadata,

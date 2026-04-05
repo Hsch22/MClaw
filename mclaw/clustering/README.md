@@ -26,6 +26,8 @@
 - `hidden_state.py`
   - 从上游 `model_outputs` 读取 hidden states，不自行触发 forward。
   - 支持 `config.hidden_state.layer` 选择目标层。
+  - 支持 `config.hidden_state.token_pooling` 选择 action span 聚合方式：`last` / `last_k_mean` / `action_mean`。
+  - `config.hidden_state.last_k` 控制 `last_k_mean` 的窗口大小。
   - 如果输入是 3D hidden states，强制要求 `action_last_token_indices`，不再默默回退到序列最后一位。
 
 - `output_grad.py`

@@ -76,6 +76,28 @@ class VerlInferenceEngine:
             )
         return SamplingParams(**resolved_kwargs)
 
+    def shutdown(self) -> None:
+        """显式回收 vLLM engine / worker 进程，避免脚本退出后残留。"""
+        llm = getattr(self, "llm", None)
+        if llm is None:
+            return
+
+        llm_engine = getattr(llm, "llm_engine", None)
+        shutdown = getattr(llm_engine, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception:
+                pass
+
+        model_executor = getattr(llm_engine, "model_executor", None)
+        shutdown = getattr(model_executor, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception:
+                pass
+
 
 def _import_sampling_params() -> Any:
     from vllm import SamplingParams
