@@ -304,8 +304,8 @@ EOF
 }
 
 launch_all() {
-    ensure_dirs
     cleanup_artifacts
+    ensure_dirs
     write_manifest
 
     start_env_session "${SESSION_ENV_TEXTCRAFT}" "${TEXTCRAFT_PORT}" "run_textcraft_train.sh" "${RUN_LOG_DIR}/textcraft_env.log" "${TEXTCRAFT_ENV_PYTHON}"
