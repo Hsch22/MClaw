@@ -39,6 +39,7 @@ SESSION_ENV_WEATHER="${SESSION_PREFIX}_env_weather"
 
 PAIR_A="${PAIR_A:-0,1}"
 PAIR_B="${PAIR_B:-2,3}"
+FORCE_KILL_PORTS_ON_LAUNCH="${FORCE_KILL_PORTS_ON_LAUNCH:-1}"
 
 TEXTCRAFT_PORT="${TEXTCRAFT_PORT:-39706}"
 BABYAI_PORT="${BABYAI_PORT:-39707}"
@@ -148,12 +149,40 @@ gpu_wait_max_steps=${GPU_WAIT_MAX_STEPS}
 gpu_wait_sleep_secs=${GPU_WAIT_SLEEP_SECS}
 gpu_min_free_primary_mb=${GPU_MIN_FREE_PRIMARY_MB}
 gpu_min_free_secondary_mb=${GPU_MIN_FREE_SECONDARY_MB}
+force_kill_ports_on_launch=${FORCE_KILL_PORTS_ON_LAUNCH}
 EOF
 }
 
 port_ready() {
     local port="$1"
     (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+}
+
+kill_listeners_on_port() {
+    local port="$1"
+    local pids=()
+
+    mapfile -t pids < <(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u || true)
+    if [ "${#pids[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    log "killing listener(s) on port ${port}: ${pids[*]}"
+    kill "${pids[@]}" 2>/dev/null || true
+    sleep 2
+
+    mapfile -t pids < <(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u || true)
+    if [ "${#pids[@]}" -gt 0 ]; then
+        log "force killing remaining listener(s) on port ${port}: ${pids[*]}"
+        kill -9 "${pids[@]}" 2>/dev/null || true
+        sleep 1
+    fi
+
+    if port_ready "${port}"; then
+        log "port ${port} is still busy after kill attempt"
+        return 1
+    fi
+    return 0
 }
 
 kill_session_if_exists() {
@@ -170,12 +199,15 @@ start_env_session() {
     local log_file="$4"
     local env_python="$5"
 
-    if port_ready "${port}" && tmux has-session -t "${session_name}" 2>/dev/null; then
+    if [ "${FORCE_KILL_PORTS_ON_LAUNCH}" != "1" ] && port_ready "${port}" && tmux has-session -t "${session_name}" 2>/dev/null; then
         log "env session ${session_name} already ready on port ${port}"
         return 0
     fi
 
     kill_session_if_exists "${session_name}"
+    if [ "${FORCE_KILL_PORTS_ON_LAUNCH}" = "1" ]; then
+        kill_listeners_on_port "${port}"
+    fi
     tmux new-session -d -s "${session_name}" \
         "bash -lc 'set -euo pipefail; cd \"${PROJECT_ROOT}\"; $(env_exports) export ENVSERVER_PYTHON=${env_python}; export ENV_PORT=${port}; bash examples/${script_name} env 2>&1 | tee -a \"${log_file}\"'"
     log "started env session ${session_name} on port ${port}"
