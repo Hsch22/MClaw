@@ -60,6 +60,7 @@ GPU_WAIT_MAX_STEPS="${GPU_WAIT_MAX_STEPS:-0}"
 GPU_WAIT_SLEEP_SECS="${GPU_WAIT_SLEEP_SECS:-60}"
 GPU_MIN_FREE_PRIMARY_MB="${GPU_MIN_FREE_PRIMARY_MB:-45000}"
 GPU_MIN_FREE_SECONDARY_MB="${GPU_MIN_FREE_SECONDARY_MB:-16000}"
+ENV_READY_WAIT_STEPS="${ENV_READY_WAIT_STEPS:-30}"
 
 VARIANT_IDS=(
     lneg1_last
@@ -150,12 +151,26 @@ gpu_wait_sleep_secs=${GPU_WAIT_SLEEP_SECS}
 gpu_min_free_primary_mb=${GPU_MIN_FREE_PRIMARY_MB}
 gpu_min_free_secondary_mb=${GPU_MIN_FREE_SECONDARY_MB}
 force_kill_ports_on_launch=${FORCE_KILL_PORTS_ON_LAUNCH}
+env_ready_wait_steps=${ENV_READY_WAIT_STEPS}
 EOF
 }
 
 port_ready() {
     local port="$1"
     (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+}
+
+wait_for_port_ready() {
+    local port="$1"
+    local max_steps="${2:-30}"
+    local step=""
+    for step in $(seq 1 "${max_steps}"); do
+        if port_ready "${port}"; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
 }
 
 kill_listeners_on_port() {
@@ -211,6 +226,29 @@ start_env_session() {
     tmux new-session -d -s "${session_name}" \
         "bash -lc 'set -euo pipefail; cd \"${PROJECT_ROOT}\"; $(env_exports) export ENVSERVER_PYTHON=${env_python}; export ENV_PORT=${port}; bash examples/${script_name} env 2>&1 | tee -a \"${log_file}\"'"
     log "started env session ${session_name} on port ${port}"
+}
+
+ensure_env_session_ready() {
+    local session_name="$1"
+    local port="$2"
+    local script_name="$3"
+    local log_file="$4"
+    local env_python="$5"
+
+    if port_ready "${port}" && tmux has-session -t "${session_name}" 2>/dev/null; then
+        log "env session ${session_name} already healthy on port ${port}"
+        return 0
+    fi
+
+    log "env session ${session_name} missing or port ${port} not ready; restarting"
+    start_env_session "${session_name}" "${port}" "${script_name}" "${log_file}" "${env_python}"
+    if wait_for_port_ready "${port}" "${ENV_READY_WAIT_STEPS}"; then
+        log "env session ${session_name} became ready on port ${port}"
+        return 0
+    fi
+
+    log "env session ${session_name} failed to become ready on port ${port}"
+    return 1
 }
 
 wait_for_exit_code() {
@@ -302,6 +340,8 @@ EOF
 
         log "starting variant ${variant_id} (layer=${layer}, pooling=${pooling}, last_k=${last_k})"
 
+        ensure_env_session_ready "${SESSION_ENV_TEXTCRAFT}" "${TEXTCRAFT_PORT}" "run_textcraft_train.sh" "${RUN_LOG_DIR}/textcraft_env.log" "${TEXTCRAFT_ENV_PYTHON}"
+        ensure_env_session_ready "${SESSION_ENV_BABYAI}" "${BABYAI_PORT}" "run_babyai_train.sh" "${RUN_LOG_DIR}/babyai_env.log" "${BABYAI_ENV_PYTHON}"
         start_variant_task "${SESSION_PREFIX}_${variant_id}_textcraft" "${PAIR_A}" "${variant_id}" "${layer}" "${pooling}" "${last_k}" \
             textcraft "${DATA_DIR}/textcraft_train.json" "http://127.0.0.1:${TEXTCRAFT_PORT}"
         start_variant_task "${SESSION_PREFIX}_${variant_id}_babyai" "${PAIR_B}" "${variant_id}" "${layer}" "${pooling}" "${last_k}" \
@@ -315,6 +355,8 @@ EOF
             exit 1
         fi
 
+        ensure_env_session_ready "${SESSION_ENV_MAZE}" "${MAZE_PORT}" "run_lmrlgym_maze_train.sh" "${RUN_LOG_DIR}/maze_env.log" "${MAZE_ENV_PYTHON}"
+        ensure_env_session_ready "${SESSION_ENV_WEATHER}" "${WEATHER_PORT}" "run_tool_weather_train.sh" "${RUN_LOG_DIR}/weather_env.log" "${WEATHER_ENV_PYTHON}"
         start_variant_task "${SESSION_PREFIX}_${variant_id}_maze" "${PAIR_A}" "${variant_id}" "${layer}" "${pooling}" "${last_k}" \
             maze "${DATA_DIR}/lmrlgym_maze_train.json" "http://127.0.0.1:${MAZE_PORT}/maze"
         start_variant_task "${SESSION_PREFIX}_${variant_id}_weather" "${PAIR_B}" "${variant_id}" "${layer}" "${pooling}" "${last_k}" \
