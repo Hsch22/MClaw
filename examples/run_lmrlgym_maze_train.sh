@@ -4,6 +4,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+MCLAW_TMPDIR="${TMPDIR:-/mnt/kangshijia/husicheng/tmp}"
+MCLAW_HF_CACHE_ROOT="${MCLAW_TMPDIR}/hf_lmrlgym"
+mkdir -p "${MCLAW_HF_CACHE_ROOT}/hub" "${MCLAW_HF_CACHE_ROOT}/transformers"
+if [ ! -s "${MCLAW_HF_CACHE_ROOT}/transformers/version.txt" ]; then
+    printf '1' > "${MCLAW_HF_CACHE_ROOT}/transformers/version.txt"
+fi
+if [ ! -s "${MCLAW_HF_CACHE_ROOT}/hub/version.txt" ]; then
+    printf '1' > "${MCLAW_HF_CACHE_ROOT}/hub/version.txt"
+fi
+
+export HF_HOME="${HF_HOME:-${MCLAW_HF_CACHE_ROOT}}"
+export HF_HUB_CACHE="${HF_HUB_CACHE:-${MCLAW_HF_CACHE_ROOT}/hub}"
+export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${MCLAW_HF_CACHE_ROOT}/transformers}"
+
 export MCLAW_TASK_NAME="maze"
 export MCLAW_TASK_DISPLAY_NAME="LMRL-Gym Maze"
 export MCLAW_DATA_FILE_DEFAULT="/mnt/kangshijia/husicheng/AgentGym-RL-Data-ID/train/lmrlgym_maze_train.json"
