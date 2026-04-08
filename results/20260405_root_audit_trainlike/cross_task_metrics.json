@@ -1,0 +1,126 @@
+{
+  "textcraft": {
+    "n_success": 50,
+    "n_root_errors": 0,
+    "methods": {
+      "action": {
+        "mean_actual_clusters": 256.0,
+        "mean_largest_cluster": 1.0,
+        "mean_selected": 16.0
+      },
+      "hidden_state": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 127.5,
+        "mean_selected": 16.0
+      },
+      "output_grad": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 55.3,
+        "mean_selected": 16.0
+      },
+      "logprob": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 109.58,
+        "mean_selected": 16.0
+      },
+      "logit_distribution": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 241.0,
+        "mean_selected": 16.0
+      }
+    }
+  },
+  "babyai": {
+    "n_success": 50,
+    "n_root_errors": 0,
+    "methods": {
+      "action": {
+        "mean_actual_clusters": 254.54,
+        "mean_largest_cluster": 2.04,
+        "mean_selected": 16.0
+      },
+      "hidden_state": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 100.5,
+        "mean_selected": 16.0
+      },
+      "output_grad": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 62.2,
+        "mean_selected": 16.0
+      },
+      "logprob": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 109.56,
+        "mean_selected": 16.0
+      },
+      "logit_distribution": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 241.0,
+        "mean_selected": 16.0
+      }
+    }
+  },
+  "maze": {
+    "n_success": 36,
+    "n_root_errors": 14,
+    "methods": {
+      "action": {
+        "mean_actual_clusters": 241.77777777777777,
+        "mean_largest_cluster": 3.888888888888889,
+        "mean_selected": 16.0
+      },
+      "hidden_state": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 97.30555555555556,
+        "mean_selected": 16.0
+      },
+      "output_grad": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 45.833333333333336,
+        "mean_selected": 16.0
+      },
+      "logprob": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 145.08333333333334,
+        "mean_selected": 16.0
+      },
+      "logit_distribution": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 241.0,
+        "mean_selected": 16.0
+      }
+    }
+  },
+  "weather": {
+    "n_success": 50,
+    "n_root_errors": 0,
+    "methods": {
+      "action": {
+        "mean_actual_clusters": 66.02,
+        "mean_largest_cluster": 100.4,
+        "mean_selected": 14.08
+      },
+      "hidden_state": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 119.06,
+        "mean_selected": 16.0
+      },
+      "output_grad": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 120.56,
+        "mean_selected": 16.0
+      },
+      "logprob": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 158.82,
+        "mean_selected": 16.0
+      },
+      "logit_distribution": {
+        "mean_actual_clusters": 16.0,
+        "mean_largest_cluster": 241.0,
+        "mean_selected": 16.0
+      }
+    }
+  }
+}

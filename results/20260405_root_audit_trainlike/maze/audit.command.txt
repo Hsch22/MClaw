@@ -1,0 +1,14 @@
+task_name=maze
+data_file=/mnt/kangshijia/husicheng/AgentGym-RL-Data-ID/train/lmrlgym_maze_train.json
+env_addr=http://127.0.0.1:39416/maze
+cuda_visible_devices=2,4
+limit=50
+methods=action,hidden_state,output_grad,logprob,logit_distribution
+root_budget=256
+root_clusters=16
+n_envs=16
+max_rounds=1
+rollout_logprobs=20
+rollout_max_tokens=512
+rollout_max_model_len=32768
+rollout_gpu_memory_utilization=0.45
