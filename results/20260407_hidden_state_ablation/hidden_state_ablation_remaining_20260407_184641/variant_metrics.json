@@ -1,0 +1,253 @@
+{
+  "lneg1_lastk4": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-1 mclaw.clustering.hidden_state.token_pooling=last_k_mean mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 102.29861111111111,
+    "per_task": {
+      "textcraft": {
+        "n_success": 2,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 101,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 73.83333333333333,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 98.27777777777777,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 136.08333333333334,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg1_lastk8": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-1 mclaw.clustering.hidden_state.token_pooling=last_k_mean mclaw.clustering.hidden_state.last_k=8",
+    "avg_mean_max_cluster": 87.11111111111111,
+    "per_task": {
+      "textcraft": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 55.166666666666664,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 57.375,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 99.77777777777777,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 136.125,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg1_mean": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-1 mclaw.clustering.hidden_state.token_pooling=action_mean mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 67.10416666666667,
+    "per_task": {
+      "textcraft": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 46.791666666666664,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 44.416666666666664,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 56.333333333333336,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 120.875,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg2_lastk4": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-2 mclaw.clustering.hidden_state.token_pooling=last_k_mean mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 103.86111111111111,
+    "per_task": {
+      "textcraft": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 102.33333333333333,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 71.83333333333333,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 105.11111111111111,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 136.16666666666666,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg2_lastk8": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-2 mclaw.clustering.hidden_state.token_pooling=last_k_mean mclaw.clustering.hidden_state.last_k=8",
+    "avg_mean_max_cluster": 91.79513888888889,
+    "per_task": {
+      "textcraft": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 63.541666666666664,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 67.25,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 96.38888888888889,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 140,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg2_mean": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-2 mclaw.clustering.hidden_state.token_pooling=action_mean mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 69.60416666666667,
+    "per_task": {
+      "textcraft": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 54,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 46.25,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 55,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 123.16666666666667,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg4_last": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-4 mclaw.clustering.hidden_state.token_pooling=last mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 99.56481481481481,
+    "per_task": {
+      "babyai": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 88.20833333333333,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "maze": {
+        "n_success": 18,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 85.94444444444444,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "weather": {
+        "n_success": 24,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 124.54166666666667,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  },
+  "lneg8_last": {
+    "overrides": "mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-8 mclaw.clustering.hidden_state.token_pooling=last mclaw.clustering.hidden_state.last_k=4",
+    "avg_mean_max_cluster": 106.67857142857143,
+    "per_task": {
+      "textcraft": {
+        "n_success": 10,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 135.5,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      },
+      "babyai": {
+        "n_success": 7,
+        "mean_actual_clusters": 16,
+        "mean_max_cluster": 77.85714285714286,
+        "mean_selected": 16,
+        "mean_representative_regret": 0.0
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+task_name=babyai
+data_file=/home/kangshijia/sicheng/AgentGym-RL-Data-ID/train/babyai_train.json
+env_addr=http://127.0.0.1:39707
+cuda_visible_devices=0,1
+limit=24
+methods=hidden_state
+root_budget=256
+root_clusters=16
+n_envs=16
+max_rounds=1
+train_device=auto
+rollout_logprobs=20
+rollout_max_tokens=512
+rollout_max_model_len=8192
+rollout_gpu_memory_utilization=0.35
+gpu_wait_enabled=1
+gpu_wait_max_steps=0
+gpu_wait_sleep_secs=60
+gpu_min_free_primary_mb=45000
+gpu_min_free_secondary_mb=16000
+extra_overrides=mclaw.clustering.method=hidden_state mclaw.clustering.hidden_state.layer=-1 mclaw.clustering.hidden_state.token_pooling=last_k_mean mclaw.clustering.hidden_state.last_k=4

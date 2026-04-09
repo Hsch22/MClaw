@@ -1,0 +1,22 @@
+{
+  "textcraft": {
+    "hidden_state": {
+      "n_success": 10,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 135.5,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  },
+  "babyai": {
+    "hidden_state": {
+      "n_success": 7,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 77.85714285714286,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  },
+  "maze": {},
+  "weather": {}
+}

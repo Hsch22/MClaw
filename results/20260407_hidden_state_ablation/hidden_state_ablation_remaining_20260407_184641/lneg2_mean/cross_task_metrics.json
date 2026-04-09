@@ -1,0 +1,38 @@
+{
+  "textcraft": {
+    "hidden_state": {
+      "n_success": 24,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 54,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  },
+  "babyai": {
+    "hidden_state": {
+      "n_success": 24,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 46.25,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  },
+  "maze": {
+    "hidden_state": {
+      "n_success": 18,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 55,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  },
+  "weather": {
+    "hidden_state": {
+      "n_success": 24,
+      "mean_actual_clusters": 16,
+      "mean_max_cluster": 123.16666666666667,
+      "mean_selected": 16,
+      "mean_representative_regret": 0.0
+    }
+  }
+}

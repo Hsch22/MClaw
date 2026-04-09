@@ -1,0 +1,13 @@
+variant_id=lneg2_mean
+layer=-2
+token_pooling=action_mean
+last_k=4
+limit=24
+root_budget=256
+root_clusters=16
+n_envs=16
+max_rounds=1
+rollout_logprobs=20
+rollout_gpu_mem=0.35
+rollout_max_model_len=8192
+train_device=auto

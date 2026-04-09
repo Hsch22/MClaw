@@ -1,0 +1,53 @@
+{
+  "config_path": "/home/kangshijia/sicheng/MClaw/mclaw/config/mclaw_trainer.yaml",
+  "data_file": "/home/kangshijia/sicheng/AgentGym-RL-Data-ID/train/textcraft_train.json",
+  "output_dir": "/home/kangshijia/sicheng/MClaw/outputs/hidden_state_ablation_remaining_20260407_184641/lneg2_lastk8/textcraft",
+  "seed": 42,
+  "n_items": 24,
+  "n_root_errors": 0,
+  "root_errors": [],
+  "methods": [
+    "hidden_state"
+  ],
+  "overrides": [
+    "data.train_file=/home/kangshijia/sicheng/AgentGym-RL-Data-ID/train/textcraft_train.json",
+    "data.max_prompt_length=512",
+    "data.max_response_length=10240",
+    "model.family=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.model_path=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.tokenizer_path=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.dtype=bfloat16",
+    "adapter.task_name=textcraft",
+    "adapter.env_addr=http://127.0.0.1:39906",
+    "distributed.enable_fsdp=false",
+    "distributed.tensor_parallel_size=1",
+    "distributed.train_device=auto",
+    "trainer.seed=42",
+    "logging.tracker=none",
+    "mclaw.tree_rollout.root_budget=256",
+    "mclaw.tree_rollout.n_envs=16",
+    "mclaw.tree_rollout.root_clusters=16",
+    "mclaw.tree_rollout.branch_budget=16",
+    "mclaw.tree_rollout.intra_branch_clusters=4",
+    "mclaw.tree_rollout.max_rounds=1",
+    "actor_rollout_ref.rollout.max_tokens=512",
+    "actor_rollout_ref.rollout.max_model_len=8192",
+    "actor_rollout_ref.rollout.gpu_memory_utilization=0.35",
+    "actor_rollout_ref.rollout.temperature=1.0",
+    "actor_rollout_ref.rollout.n=1",
+    "actor_rollout_ref.rollout.logprobs=20",
+    "mclaw.clustering.method=hidden_state",
+    "mclaw.clustering.hidden_state.layer=-2",
+    "mclaw.clustering.hidden_state.token_pooling=last_k_mean",
+    "mclaw.clustering.hidden_state.last_k=8"
+  ],
+  "method_summary": {
+    "hidden_state": {
+      "n_success": 24,
+      "mean_actual_clusters": 16,
+      "mean_representative_regret": 0.0,
+      "worst_representative_regret": 0.0
+    }
+  },
+  "method_errors": {}
+}

@@ -1,0 +1,171 @@
+{
+  "config_path": "/home/kangshijia/sicheng/MClaw/mclaw/config/mclaw_trainer.yaml",
+  "data_file": "/home/kangshijia/sicheng/AgentGym-RL-Data-ID/train/lmrlgym_maze_train.json",
+  "output_dir": "/home/kangshijia/sicheng/MClaw/outputs/hidden_state_ablation_remaining_20260407_184641/lneg8_last/maze",
+  "seed": 42,
+  "n_items": 24,
+  "n_root_errors": 24,
+  "root_errors": [
+    {
+      "item_index": 0,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 1,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 2,
+      "item_id": "lmrlgym_maze_17",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 3,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 4,
+      "item_id": "lmrlgym_maze_17",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 5,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 6,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 7,
+      "item_id": "lmrlgym_maze_17",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 8,
+      "item_id": "lmrlgym_maze_16",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 9,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 10,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 11,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 12,
+      "item_id": "lmrlgym_maze_16",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 13,
+      "item_id": "lmrlgym_maze_17",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 14,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 15,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 16,
+      "item_id": "lmrlgym_maze_21",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 17,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 18,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 19,
+      "item_id": "lmrlgym_maze_15",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 20,
+      "item_id": "lmrlgym_maze_17",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 21,
+      "item_id": "lmrlgym_maze_25",
+      "error": "KeyError: 'observation'"
+    },
+    {
+      "item_index": 22,
+      "item_id": "lmrlgym_maze_20",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "item_index": 23,
+      "item_id": "lmrlgym_maze_18",
+      "error": "RuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    }
+  ],
+  "methods": [
+    "hidden_state"
+  ],
+  "overrides": [
+    "data.train_file=/home/kangshijia/sicheng/AgentGym-RL-Data-ID/train/lmrlgym_maze_train.json",
+    "data.max_prompt_length=512",
+    "data.max_response_length=10240",
+    "model.family=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.model_path=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.tokenizer_path=/home/kangshijia/sicheng/AgentGym-RL/models/Qwen3-4B-Instruct-2507",
+    "model.dtype=bfloat16",
+    "adapter.task_name=maze",
+    "adapter.env_addr=http://127.0.0.1:39816/maze",
+    "distributed.enable_fsdp=false",
+    "distributed.tensor_parallel_size=1",
+    "distributed.train_device=auto",
+    "trainer.seed=42",
+    "logging.tracker=none",
+    "mclaw.tree_rollout.root_budget=256",
+    "mclaw.tree_rollout.n_envs=16",
+    "mclaw.tree_rollout.root_clusters=16",
+    "mclaw.tree_rollout.branch_budget=16",
+    "mclaw.tree_rollout.intra_branch_clusters=4",
+    "mclaw.tree_rollout.max_rounds=1",
+    "actor_rollout_ref.rollout.max_tokens=512",
+    "actor_rollout_ref.rollout.max_model_len=8192",
+    "actor_rollout_ref.rollout.gpu_memory_utilization=0.35",
+    "actor_rollout_ref.rollout.temperature=1.0",
+    "actor_rollout_ref.rollout.n=1",
+    "actor_rollout_ref.rollout.logprobs=20",
+    "mclaw.clustering.method=hidden_state",
+    "mclaw.clustering.hidden_state.layer=-8",
+    "mclaw.clustering.hidden_state.token_pooling=last",
+    "mclaw.clustering.hidden_state.last_k=4"
+  ],
+  "method_summary": {
+    "hidden_state": {
+      "n_success": 0
+    }
+  },
+  "method_errors": {}
+}
